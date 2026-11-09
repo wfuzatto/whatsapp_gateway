@@ -1,0 +1,141 @@
+openapi: 3.1.0
+info:
+  title: Ponte WhatsApp Gateway API
+  version: 1.0.0
+  description: API multitenant para registro autorizado de contatos, envio de mensagens e consulta de templates e mensagens.
+servers:
+  - url: https://seu-dominio.example
+    description: Troque pelo endereço público da aplicação, incluindo a pasta do projeto se estiver em subdiretório.
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/contacts:
+    post:
+      summary: Cadastrar ou atualizar contato
+      description: Marque consent como true somente quando houver autorização registrada. Um descadastramento prévio só é removido com consentimento explícito e nova fonte informada.
+      operationId: upsertContact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, phone]
+              properties:
+                name: { type: string, example: Ana Silva }
+                phone: { type: string, description: Número internacional, somente dígitos, example: "5511999999999" }
+                consent: { type: boolean, default: false }
+                consent_source: { type: string, description: Evidência ou origem do consentimento }
+      responses:
+        "201": { description: Contato registrado }
+        "401": { description: Chave ausente ou inválida }
+        "422": { description: Dados inválidos ou origem de consentimento ausente }
+  /api/v1/messages:
+    get:
+      summary: Listar mensagens recentes
+      operationId: listMessages
+      responses:
+        "200":
+          description: Até 100 mensagens recentes da empresa vinculada à chave
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { type: object } }
+    post:
+      summary: Enviar mensagem
+      description: Texto livre exige janela de atendimento aberta. Fora dela, use um template aprovado e contato com consentimento confirmado. Envie Idempotency-Key para proteger solicitações repetidas.
+      operationId: sendMessage
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema: { type: string }
+          required: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [to, text]
+                  properties:
+                    to: { type: string, example: "5511999999999" }
+                    text: { type: string }
+                - type: object
+                  required: [to, template]
+                  properties:
+                    to: { type: string, example: "5511999999999" }
+                    template:
+                      type: object
+                      required: [name, language]
+                      properties:
+                        name: { type: string, example: confirmacao_pedido }
+                        language:
+                          type: object
+                          required: [code]
+                          properties:
+                            code: { type: string, example: pt_BR }
+                        components: { type: array, items: { type: object }, description: Parâmetros BODY em formato compatível com a Cloud API }
+                - type: object
+                  required: [to, media]
+                  description: Use um asset_id retornado por POST /api/v1/media. Mídia livre exige janela de atendimento aberta.
+                  properties:
+                    to: { type: string, example: "5511999999999" }
+                    media:
+                      type: object
+                      required: [asset_id]
+                      properties:
+                        asset_id: { type: integer, example: 42 }
+                        caption: { type: string, description: Legenda opcional para imagem, vídeo ou documento }
+      responses:
+        "202": { description: Solicitação aceita pela API da Meta }
+        "401": { description: Chave ausente ou inválida }
+        "422": { description: Consentimento, template ou janela inválidos }
+        "502": { description: Falha ao enviar pela Cloud API }
+  /api/v1/media:
+    post:
+      summary: Enviar arquivo para a Meta
+      description: O arquivo é validado, enviado ao número da empresa e registrado como asset_id isolado por tenant. Use-o em POST /api/v1/messages.
+      operationId: uploadMedia
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201": { description: Mídia carregada e pronta para referência no endpoint de mensagens }
+        "401": { description: Chave ausente ou inválida }
+        "422": { description: Arquivo inválido ou formato/tamanho não aceito }
+  /api/v1/media/{asset_id}:
+    get:
+      summary: Baixar anexo vinculado à empresa
+      description: Requer escopo messages:read. O conteúdo é buscado da Meta e retornado como arquivo.
+      operationId: downloadMedia
+      parameters:
+        - in: path
+          name: asset_id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Arquivo da mídia }
+        "401": { description: Chave ausente ou inválida }
+        "403": { description: Chave sem escopo messages:read }
+        "404": { description: Mídia não encontrada nesta empresa }
+  /api/v1/templates:
+    get:
+      summary: Listar templates locais e seus estados
+      operationId: listTemplates
+      responses:
+        "200": { description: Templates sincronizados com a conta Meta }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API key
