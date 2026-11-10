@@ -54,6 +54,11 @@ $pdo->prepare("UPDATE whatsapp_tenants SET status='suspended' WHERE id=?")->exec
 $_SERVER['HTTP_AUTHORIZATION']='Bearer '.$keyA;
 denied(fn()=>bearerContext(),'suspended tenant denied');
 $pdo->prepare("UPDATE whatsapp_tenants SET status='active' WHERE id=?")->execute([$a]);
+$pdo->prepare("UPDATE whatsapp_accounts SET status='suspended' WHERE id=?")->execute([$a1]);
+$_SERVER['HTTP_AUTHORIZATION']='Bearer '.$keyA1;
+denied(fn()=>bearerContext(),'suspended number API key denied');
+$pdo->prepare("UPDATE whatsapp_accounts SET status='active' WHERE id=?")->execute([$a1]);
+
 $event=['object'=>'whatsapp_business_account','entry'=>[[
     'id'=>'111111111','changes'=>[[
       'field'=>'messages','value'=>[

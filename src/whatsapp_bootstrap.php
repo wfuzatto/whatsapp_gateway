@@ -97,7 +97,10 @@ function bearerContext(): array {
     $s = db()->prepare("SELECT k.id AS key_id,k.tenant_id,k.account_id,t.slug AS tenant_slug
         FROM whatsapp_api_keys k
         JOIN whatsapp_tenants t ON t.id=k.tenant_id
-        WHERE k.token_hash=? AND k.active=1 AND t.status='active' LIMIT 1");
+        WHERE k.token_hash=? AND k.active=1 AND t.status='active'
+        AND (k.account_id IS NULL OR EXISTS (
+             SELECT 1 FROM whatsapp_accounts a WHERE a.tenant_id=k.tenant_id
+               AND a.id=k.account_id AND a.status='active')) LIMIT 1");
     $s->execute([hash('sha256',$m[1])]);
     $context = $s->fetch();
     if (!$context) throw new HttpError('Invalid or missing API token',401);
