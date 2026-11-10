@@ -48,8 +48,8 @@ final class Jobs {
         }
     }
     public static function process(array $job): void {
-        $s = db()->prepare('SELECT a.* FROM whatsapp_accounts a JOIN whatsapp_tenants t ON t.id=a.tenant_id
-                             WHERE a.id=? AND a.tenant_id=? AND a.status='active' AND t.status='active'');
+        $s = db()->prepare("SELECT a.* FROM whatsapp_accounts a JOIN whatsapp_tenants t ON t.id=a.tenant_id
+                             WHERE a.id=? AND a.tenant_id=? AND a.status='active' AND t.status='active'");
         $s->execute([$job['account_id'],$job['tenant_id']]);
         $account = $s->fetch();
         if (!$account) { self::finish($job,'failed',[], 'Account no longer exists'); return; }
