@@ -12,6 +12,8 @@ on:
       - bin/whatsapp_manage.php
       - bin/whatsapp_worker.php
       - database/whatsapp_schema.sql
+      - database/whatsapp_migration_portal.sql
+      - bin/whatsapp_ftp_public_html.py
 
 permissions:
   contents: read

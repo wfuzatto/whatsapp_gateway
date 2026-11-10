@@ -6,6 +6,7 @@ require dirname(__DIR__) . '/src/whatsapp_Rules.php';
 require dirname(__DIR__) . '/src/whatsapp_Webhook.php';
 require dirname(__DIR__) . '/src/whatsapp_Jobs.php';
 require dirname(__DIR__) . '/src/whatsapp_Portal.php';
+require dirname(__DIR__) . '/src/whatsapp_Installer.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -47,6 +48,7 @@ try {
     }
     $path = rtrim($path,'/') ?: '/';
 
+    if (WhatsAppInstaller::route($path, $method)) exit;
     if (WhatsAppPortal::route($path, $method)) exit;
     if ($method === 'GET' && $path === '/health') response(200,['status'=>'ok','gateway'=>'cloud-api','version'=>'1.0']);
     if ($path === '/webhooks/meta') {

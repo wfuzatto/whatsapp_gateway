@@ -61,3 +61,5 @@ jobs:
         run: php tests/whatsapp_integration.php
       - name: Portal registration/login HTTP tests
         run: bash tests/whatsapp_portal_http.sh
+      - name: Protected installer and superadmin HTTP tests
+        run: bash tests/whatsapp_install_http.sh

@@ -96,3 +96,18 @@ A rota `GET /` apresenta uma página pública informativa em `public/whatsapp_ho
 - O cadastro só é habilitado quando o banco e o catálogo de planos estão disponíveis. Não exponha dados do banco ou segredos em repositório público nem utilize FTP comum para novas senhas.
 
 A ativação de número, pagamentos automáticos, e-mail de confirmação e caixa de entrada visual ainda não estão disponíveis. Não confunda a landing de planos com uma plataforma BSP completa.
+
+## Assistente inicial de instalação — `/install`
+Abra **https://zapapi.inf.br/install** (ou o domínio temporário da hospedagem).
+
+O instalador mostra os parâmetros do banco remoto pré-configurados (host: `zapapi1.mysql.dbaas.com.br`, database/user: `zapapi1`); não recebe hostname arbitrário no formulário. Exige:
+1. HTTPS (não use HTTP para credenciais).
+2. Chave aleatória do arquivo **`/whatsapp_install_key.txt` na raiz do FTP**, fora de `/public_html/`. O GitHub Actions cria este arquivo *uma única vez*, caso a instalação ainda não tenha sido bloqueada. Acesse-o pelo FileZilla e mantenha-o secreto.
+3. Senha atual do MySQL, digitada apenas pelo navegador HTTPS; nunca adicione ao GitHub.
+4. Nome/e-mail e senha nova do superadministrador (mínimo 12 caracteres com letras e números).
+
+Depois de confirmar, a instalação verifica acesso ao banco, cria as 14 tabelas com prefixo `whatsapp_`, carrega os três planos iniciais, registra o administrador, gera `MASTER_KEY_BASE64` e token de verificação, e salva o `.env` privado em `/home/zapapi1/.env`. O arquivo não é enviado por FTP nem publicado no Git. A chave temporária é removida e um marcador de instalação é gravado fora do diretório público.
+
+Depois, acesse **`/admin`** ou **`/admin/entrar`**. No painel, veja os tenants e ative/suspenda assinaturas manualmente. Ativar assinatura não cobra o cliente.
+
+O instalador **não sobrescreve `.env` existente, não derruba tabelas e recusa reinstalação** após a criação do primeiro superadmin. Se a hospedagem não autorizar gravar acima de `public_html`, interrompe com erro seguro em vez de expor segredos na pasta pública. Por segurança, não use a senha de FTP como senha do MySQL; troque senhas divulgadas anteriormente.

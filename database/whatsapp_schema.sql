@@ -165,6 +165,17 @@ CREATE TABLE whatsapp_signup_attempts (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_rate (action,key_hash,created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE whatsapp_admins (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(190) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  role ENUM('superadmin') NOT NULL DEFAULT 'superadmin',
+  status ENUM('active','disabled') NOT NULL DEFAULT 'active',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_login_at DATETIME NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 INSERT INTO whatsapp_plans(slug,title,summary,price_cents,max_numbers,features,is_popular,sort_order) VALUES
  ('essencial','Essencial','Comece a integrar seu WhatsApp com sistemas e automações.',7900,1,JSON_ARRAY('1 número conectado','API REST e webhooks','Envio de templates aprovados','Histórico técnico de eventos'),0,10),
  ('profissional','Profissional','Para operações com múltiplos fluxos e integrações.',19900,3,JSON_ARRAY('Até 3 números','Tudo do Essencial','Múltiplas integrações','Filas e rastreamento de mensagens'),1,20),

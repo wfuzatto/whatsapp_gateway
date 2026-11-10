@@ -10,6 +10,7 @@ import os
 import pathlib
 import posixpath
 import re
+import secrets
 import sys
 import time
 import zipfile
@@ -120,6 +121,23 @@ def main():
         if protected:
             fail("Ha arquivos de outro site em /public_html: " + ", ".join(protected)
                  + ". Nenhum arquivo do gateway foi publicado.")
+        # Preparar uma chave aleatoria de primeiro uso FORA de public_html.
+        # O operador a le pelo FileZilla na raiz FTP, nunca por URL.
+        done = retrieve_if_exists(ftp, "/whatsapp_install_done.txt", names)
+        if done is None:
+            old_token = retrieve_if_exists(ftp, "/whatsapp_install_key.txt", names)
+            if old_token is None:
+                secret = secrets.token_urlsafe(40).encode("ascii")
+                ftp.storbinary("STOR /whatsapp_install_key.txt", io.BytesIO(secret))
+                verify = io.BytesIO()
+                ftp.retrbinary("RETR /whatsapp_install_key.txt", verify.write)
+                if sha256(verify.getvalue()) != sha256(secret):
+                    fail("Chave de instalacao nao foi verificada")
+                print("Chave do instalador criada em /whatsapp_install_key.txt (valor oculto).")
+            else:
+                print("Chave do instalador ja existe em /whatsapp_install_key.txt (valor oculto).")
+        else:
+            print("Instalacao ja bloqueada; chave de instalacao nao sera gerada.")
         print("Destino de publicacao confirmado: /public_html/")
         print("Arquivos do projeto selecionados para deploy:", len(upload))
 

@@ -17,7 +17,7 @@ function denied(callable $fn,string $name): void {
 $pdo=db();
 $schema=file_get_contents(dirname(__DIR__).'/database/whatsapp_schema.sql');
 preg_match_all('/CREATE TABLE whatsapp_[a-z_]+.*?ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;/s',$schema,$matches);
-ok(count($matches[0])===13,'all 13 tables named whatsapp_*');
+ok(count($matches[0])===14,'all 14 tables named whatsapp_*');
 foreach($matches[0] as $sql)$pdo->exec($sql);
 $seedAt=strpos($schema,'INSERT INTO whatsapp_plans(');
 if($seedAt===false) throw new RuntimeException('Missing plan seed data');
