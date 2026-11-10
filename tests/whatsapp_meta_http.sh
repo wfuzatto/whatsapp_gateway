@@ -25,7 +25,8 @@ code="$(curl -sS -o /dev/null -w '%{http_code}' -b "$tmp/a.jar" -c "$tmp/a.jar" 
 curl -fsS -b "$tmp/a.jar" "$host/painel/meta" -o "$tmp/meta.html"
 grep -q "Integração com a Meta" "$tmp/meta.html"
 grep -q "Validar e salvar integração" "$tmp/meta.html"
-grep -q "Enviar template para análise da Meta" "$tmp/meta.html"
+grep -q "Criar e enviar template para aprovação" "$tmp/meta.html"
+grep -q "Conecte primeiro seu WABA" "$tmp/meta.html"
 grep -q "Empresa Sol A" "$tmp/meta.html"
 if grep -q "Empresa Lua B" "$tmp/meta.html"; then
     echo "FAIL: tenant B leaked into tenant A meta settings"; exit 1
