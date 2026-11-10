@@ -3,17 +3,19 @@ APP_ENV=production
 APP_REQUIRE_HTTPS=1
 APP_BASE_PATH=
 GRAPH_VERSION=v26.0
-DB_HOST=127.0.0.1
+DB_HOST=zapapi1.mysql.dbaas.com.br
 DB_PORT=3306
-DB_NAME=whatsapp_gateway
-DB_USER=whatsapp_gateway
-DB_PASSWORD=ALTERE
+DB_NAME=zapapi1
+DB_USER=zapapi1
+DB_PASSWORD=COLOQUE_A_SENHA_NOVA_SOMENTE_NO_SERVIDOR
 # Gere com: php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"
 MASTER_KEY_BASE64=ALTERE_COM_CHAVE_32_BYTES_BASE64
 # App secret da Meta; nunca use o access token como app secret.
 META_APP_SECRET=ALTERE
 META_VERIFY_TOKEN=ALTERE_TOKEN_ALEATORIO
-# Maximo 20 MB de payload JSON, 100 MB de upload; ajuste conforme limites Meta.
+# Banco remoto DBaaS: confirme conectividade a partir da hospedagem do PHP.
+# A senha real nao deve ser adicionada ao Git nem ao arquivo de exemplo.
+# Limite do corpo JSON: 4 MB; maximo upload: 100 MB (ver limites do PHP e Meta).
 MAX_BODY_BYTES=4194304
 MAX_UPLOAD_BYTES=104857600
 # Caso esteja atras de proxy HTTPS confiavel:
