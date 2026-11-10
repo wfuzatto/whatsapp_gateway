@@ -111,3 +111,8 @@ Depois de confirmar, a instalação verifica acesso ao banco, cria as 14 tabelas
 Depois, acesse **`/admin`** ou **`/admin/entrar`**. No painel, veja os tenants e ative/suspenda assinaturas manualmente. Ativar assinatura não cobra o cliente.
 
 O instalador **não sobrescreve `.env` existente, não derruba tabelas e recusa reinstalação** após a criação do primeiro superadmin. Se a hospedagem não autorizar gravar acima de `public_html`, interrompe com erro seguro em vez de expor segredos na pasta pública. Por segurança, não use a senha de FTP como senha do MySQL; troque senhas divulgadas anteriormente.
+
+
+## Integração Meta pelo painel do cliente
+
+Após ativar a assinatura, acesse `/painel/meta`. O cliente pode cadastrar e validar WABA ID, Phone Number ID e token de sistema, consultar status de templates, submeter modelos para análise via Graph API, solicitar inscrição no webhook global e criar/revogar suas próprias chaves de API. Nenhum token é revelado depois de salvo. Os dados são isolados por tenant. Consulte `docs/whatsapp_META_INTEGRACAO.md` para roteiro de configuração. A aprovação de templates é feita exclusivamente pela Meta; o software não os aprova automaticamente.

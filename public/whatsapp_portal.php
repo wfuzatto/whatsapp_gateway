@@ -49,6 +49,7 @@ header('X-Robots-Tag: '.($mode==='landing'?'index, follow':'noindex, nofollow'))
       <a href="/#como-funciona" class="hide-mobile">Como funciona</a>
       <a href="/#planos">Planos</a>
       <?php if($mode==='dashboard'): ?>
+      <a href="/painel/meta" class="hide-mobile">Integração Meta</a>
       <form action="/sair" method="post" style="margin:0"><input type="hidden" name="csrf" value="<?=whatsappE($csrf)?>"><button class="logout" type="submit">Sair</button></form>
       <?php else: ?>
       <a href="/entrar" class="hide-mobile">Entrar</a>
@@ -209,6 +210,11 @@ header('X-Robots-Tag: '.($mode==='landing'?'index, follow':'noindex, nofollow'))
   <?php else: ?>
   <div class="note note-success">Assinatura ativada. Configure os números e credenciais da Meta com o administrador do gateway.</div>
   <?php endif; ?>
+ </article>
+ <article class="dash-panel" style="border-color:#a8dfc7;background:#f8fffa">
+  <h2>Integração com a Meta</h2>
+  <p style="color:#587568">Configure seu número oficial, WABA e token de acesso. Envie templates para aprovação, acompanhe o status e gere chaves de API exclusivas para sua empresa.</p>
+  <a href="/painel/meta" class="btn btn-dark">Configurar WhatsApp e templates →</a>
  </article>
  <article class="dash-panel"><h2>Próximas etapas</h2>
   <ol class="steps-list"><li>Confirme o plano e a ativação comercial.</li><li>Prepare o WABA e o número de telefone na Meta.</li><li>Associe suas credenciais oficiais ao tenant.</li><li>Configure webhooks e integre seu sistema à API.</li></ol>
