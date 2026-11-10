@@ -94,33 +94,7 @@ function queue_tenant_event(int $tid,string $type,array $payload): void {
 }
 function persist_app_config(array $config): void { $written=file_put_contents(CONFIG_FILE,"<?php\nreturn ".var_export($config,true).";\n",LOCK_EX);if($written===false)throw new RuntimeException('Não foi possível atualizar storage/config.local.php. Verifique a permissão da pasta storage.');$GLOBALS['cfg']=$config; }
 function installed_tenant(): int { return tenant_id(); }
-function render_install(): void {
-    $error='';
-    if ($_SERVER['REQUEST_METHOD']==='POST') {
-        try {
-            csrf_check();
-            $requiredExtensions=['pdo_mysql','openssl','curl','mbstring','iconv','fileinfo','json'];$missingExtensions=array_values(array_filter($requiredExtensions,fn($extension)=>!extension_loaded($extension)));if($missingExtensions)throw new RuntimeException('Ative estas extensões PHP no XAMPP e reinicie o Apache: '.implode(', ',$missingExtensions).'.');
-            $host=trim((string)($_POST['db_host']??'127.0.0.1')); $port=(int)($_POST['db_port']??3306); $name=trim((string)($_POST['db_name']??'')); $user=trim((string)($_POST['db_user']??'root')); $pass=(string)($_POST['db_password']??'');
-            if (!preg_match('/^[a-zA-Z0-9_]+$/',$name)) throw new RuntimeException('Nome do banco inválido. Use letras, números e sublinhado. Crie o banco no phpMyAdmin antes de continuar.');
-            $pdo=new PDO("mysql:host=$host;port=$port;dbname=$name;charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);$pdo->exec("SET time_zone = '".date('P')."'");
-            $key=bin2hex(random_bytes(32)); $admin=trim((string)($_POST['admin_name']??'')); $email=strtolower(trim((string)($_POST['admin_email']??''))); $pwd=(string)($_POST['admin_password']??''); $org=trim((string)($_POST['company_name']??''));
-            if (!$admin || !filter_var($email,FILTER_VALIDATE_EMAIL) || strlen($pwd)<12 || !$org) throw new RuntimeException('Informe empresa, nome, e-mail e uma senha de administrador com ao menos 12 caracteres.');
-            $config=['installed'=>true,'app_key'=>$key,'app_url'=>rtrim((string)($_POST['app_url']??''),'/'),'meta_graph_version'=>'v26.0','database'=>['host'=>$host,'port'=>$port,'name'=>$name,'user'=>$user,'password'=>$pass]];
-            $configPath=APP_ROOT.'/storage/config.local.php';
-            if (is_file($configPath)) throw new RuntimeException('A instalação já foi iniciada. Apague storage/config.local.php para recomeçar.');
-            $export="<?php\nreturn ".var_export($config,true).";\n";
-            if (file_put_contents($configPath,$export,LOCK_EX)===false) throw new RuntimeException('Não consegui gravar storage/config.local.php. Verifique permissão de escrita da pasta storage.');
-            $GLOBALS['cfg']=$config;
-            $schema=file_get_contents(APP_ROOT.'/database/schema.sql');
-            foreach (array_filter(array_map('trim',preg_split('/;\s*(?:\r?\n|$)/',$schema))) as $sql) $pdo->exec($sql);
-            $pdo->prepare('INSERT INTO tenants(name,slug,status,created_at) VALUES(?,?,?,NOW())')->execute([$org,substr(bin2hex(random_bytes(8)),0,12),'active']); $tid=(int)$pdo->lastInsertId();
-            $pdo->prepare('INSERT INTO users(tenant_id,name,email,password_hash,role,status,created_at) VALUES(?,?,?,?,?,?,NOW())')->execute([$tid,$admin,$email,password_hash($pwd,PASSWORD_DEFAULT),'platform_admin','active']);
-            $pdo->prepare('INSERT INTO tenant_meta(tenant_id,updated_at) VALUES(?,NOW())')->execute([$tid]);
-            flash('Instalação concluída. Entre com o administrador que você criou.'); redirect('?r=login');
-        } catch (Throwable $e) { $error=$e->getMessage(); }
-    }
-    $title='Instalação inicial'; include APP_ROOT.'/app/views/install.php';
-}
+// A instalação inicial agora é controlada por app/setup_wizard.php, via index.php.
 function handle_login(): void {
     $error='';
     if($_SERVER['REQUEST_METHOD']==='POST'){
