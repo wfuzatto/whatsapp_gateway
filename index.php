@@ -6,7 +6,7 @@ $route = (string)($_GET['r'] ?? '');
 if (preg_match('#^api/v1/(contacts|messages|templates|media(?:/\d+)?)$#',$route,$apiMatch)) { handle_api($apiMatch[1]); exit; }
 if (str_starts_with($route, 'api/')) { handle_api(substr($route, 4)); exit; }
 if ($route === 'webhook') { handle_meta_webhook(); exit; }
-if (!installed()) { render_install(); exit; }
+if (!installed()) { require __DIR__ . '/app/setup_wizard.php'; exit; }
 if ($route === 'logout') { session_destroy(); redirect('?r=login'); }
 if (!current_user() && $route !== 'login') redirect('?r=login');
 if ($route === 'login') { handle_login(); exit; }
