@@ -1,102 +1,79 @@
-# API e webhooks de retorno
+# REST API — versão 1
 
-Todos os endpoints da API usam a URL da aplicação mais `api/v1/...`. Gere uma chave em **API e integrações** e envie-a como `Authorization: Bearer SUA_CHAVE`. A chave completa só aparece uma vez. O banco guarda o hash; revogue-a se perder ou expor.
+## Autenticação
+A URL deve ser HTTPS. Para todos os endpoints `/v1/*`, use `Authorization: Bearer wg_...`.
+Uma chave pertence a um único número de WhatsApp Business. O `META_APP_SECRET` e o `META_VERIFY_TOKEN` **não** são chaves de API do gateway.
 
-## Registrar contato e autorização
+## Endpoints
+| Método | Caminho | Função |
+|---|---|---|
+| GET | /health | Verifica processo |
+| GET/POST | /webhooks/meta | Meta verify challenge; eventos assinados |
+| GET | /v1/me | ID da conta e versão Graph |
+| POST | /v1/messages | Envia mensagem (assíncrono por padrão) |
+| POST | /v1/messages?sync=1 | Resposta síncrona direta da Meta |
+| POST | /v1/messages/read | Marca mensagem recebida como lida |
+| GET | /v1/messages | Lista mensagens armazenadas |
+| GET | /v1/contacts | Contatos e consentimentos |
+| POST | /v1/contacts/consent | Registrar/revogar consentimento |
+| GET | /v1/events | Eventos brutos verificados |
+| GET | /v1/jobs/{id} | Job e status |
+| POST | /v1/jobs/{id}?action=retry | Reenvio manual: pode duplicar! |
+| POST | /v1/media | Upload multipart file |
+| GET/DELETE | /v1/media/{media_id} | Metadados/exclusão na Meta |
+| GET/POST/DELETE | /v1/templates | Listagem, criação, exclusão ?name= |
+| POST | /v1/templates/{template_id} | Atualização via Meta Graph |
+| GET | /v1/phone-numbers | Números do WABA |
+| GET/POST | /v1/business-profile | Perfil do número |
+| GET/POST | /v1/flows | Flows Graph |
+| GET/POST/DELETE | /v1/flows/{flow_id} | Consulta, alteração e exclusão |
+| GET | /v1/graph?scope=waba&edge=... | Edge Graph permitida, somente leitura |
 
-`POST /api/v1/contacts`
+Formatos de mensagens são os objetos **originais** da Meta: template, text, image, audio, video, document, location, contacts, interactive, reaction, sticker, product, etc. O gateway não reescreve componentes: siga o schema da versão Graph configurada.
 
+## Exemplos
+```http
+POST /v1/contacts/consent
+Authorization: Bearer SUA_CHAVE
+Content-Type: application/json
+
+{"wa_id":"5511999999999","consent":true,"source":"formulario-site-2026-11-09"}
+```
+
+```http
+POST /v1/messages
+Authorization: Bearer SUA_CHAVE
+Idempotency-Key: pedido-123-aviso-1
+Content-Type: application/json
+
+{"to":"5511999999999","type":"template","template":{"name":"hello_world","language":{"code":"en_US"}}}
+```
+
+Resposta assíncrona HTTP 202:
 ```json
-{
-  "name": "Ana Silva",
-  "phone": "5511999999999",
-  "consent": true,
-  "consent_source": "Formulário de pedido 8472, aceito em 2026-11-02"
-}
+{"job_id":10,"status":"queued","duplicate":false}
 ```
+O worker conclui o envio. Consulte `GET /v1/jobs/10`. Chave de idempotência impede duplicação dentro da fila para o mesmo número; **não** garante exatamente uma entrega em falhas de rede para a Meta.
 
-Quando `consent` for `true`, envie uma descrição verificável da origem do consentimento. Atualizações sem consentimento explícito não removem um bloqueio ou descadastramento já registrado.
-
-## Enviar mensagem
-
-`POST /api/v1/messages`
-
-Texto livre só funciona se houver uma conversa com mensagem recebida nas últimas 24 horas. Para iniciar contato ou falar fora da janela, envie um template aprovado e um contato com consentimento confirmado.
-
+Para texto livre, somente dentro da janela de 24h contada da última mensagem recebida:
 ```json
-{
-  "to": "5511999999999",
-  "template": {
-    "name": "confirmacao_pedido",
-    "language": { "code": "pt_BR" }
-  }
-}
+{"to":"5511999999999","type":"text","text":{"body":"Olá! Em que podemos ajudar?"}}
 ```
 
-Para texto dentro da janela:
-
+Para marcar como lida:
 ```json
-{
-  "to": "5511999999999",
-  "text": "Olá! Posso ajudar com seu pedido?"
-}
+{"message_id":"wamid.HBgMNTUxMTk5OTk5OTk5ORUCABIY..."}
 ```
 
-Use `Idempotency-Key` para reduzir o risco de duplicar solicitações repetidas. Uma resposta `202` informa que a Meta aceitou a solicitação; estados finais chegam depois pelo webhook. O retorno inclui `message_id` e `status`.
-
-## Enviar mídia
-
-Faça upload autenticado do arquivo para a conta Meta da empresa: `POST /api/v1/media` como `multipart/form-data`, com campo `file` e o mesmo cabeçalho `Authorization`. A aplicação aceita JPEG/PNG até 5 MB; MP4, áudio compatível e PDF até 16 MB. A resposta contém um `asset_id` local, vinculado à empresa e ao número configurado.
-
-Use esse identificador no endpoint de mensagens, sempre respeitando a janela de atendimento aberta:
-
-```json
-{
-  "to": "5511999999999",
-  "media": {
-    "asset_id": 42,
-    "caption": "Segue o documento solicitado."
-  }
-}
+Para upload:
+```bash
+curl -X POST https://seudominio.com/v1/media -H 'Authorization: Bearer SUA_CHAVE' -F 'file=@foto.jpg'
 ```
+Respeite limites e formatos de mídia permitidos pela Meta e pelo PHP (upload_max_filesize, post_max_size). **Não** exponha token Meta a aplicações clientes.
 
-`caption` é opcional e se aplica a imagens, vídeos e documentos. O sistema mantém os IDs e metadados da mídia separados por empresa. A Meta pode expirar ou rejeitar um arquivo; se isso acontecer, envie-o novamente. Para obter um anexo recebido pelo webhook, use o `asset_id` entregue no evento ou listado em `GET /api/v1/messages` e baixe-o em `GET /api/v1/media/{asset_id}` com uma chave que tenha escopo `messages:read`.
+## Eventos e callbacks
+Webhook Meta: `X-Hub-Signature-256: sha256=<hex>`; calculado sobre bytes originais com o App Secret.
+Callbacks aos seus sistemas: `X-Gateway-Signature-256` e `X-Gateway-Event-ID`; calcule HMAC SHA256 sobre o JSON raw usando o segredo configurado. Endpoint de destino deve retornar HTTP 2xx para confirmar. Eventos são deduplicados por hash de entry + change; a entrega do callback é pelo menos uma vez.
 
-## Consultar dados
-
-- `GET /api/v1/messages` retorna até 100 mensagens recentes da empresa.
-- `GET /api/v1/templates` retorna nome, idioma, categoria e estado dos templates locais.
-
-Erros usam JSON com `error` e um código HTTP apropriado. A API opera no escopo da empresa vinculada à chave; não aceite `tenant_id` fornecido na requisição.
-
-## Webhook do cliente
-
-Configure um endereço HTTPS público em **API e integrações**. O sistema enfileira os eventos e o worker faz as entregas com espera progressiva, sem seguir redirecionamentos. Após salvar, copie o segredo de assinatura que aparece uma única vez.
-
-Eventos disponíveis:
-
-- `message.received`
-- `message.sent`
-- `message.status`
-
-O cabeçalho `X-Ponte-Event` informa o tipo. `X-Ponte-Signature` contém `sha256=` seguido do HMAC-SHA256 do corpo JSON exato, usando o segredo compartilhado. Exemplo para validar em PHP:
-
-```php
-$raw = file_get_contents('php://input');
-$provided = $_SERVER['HTTP_X_PONTE_SIGNATURE'] ?? '';
-$expected = 'sha256=' . hash_hmac('sha256', $raw, $webhookSecret);
-if (!hash_equals($expected, $provided)) {
-    http_response_code(401);
-    exit;
-}
-$event = json_decode($raw, true);
-```
-
-O objeto tem `id`, `type`, `created_at` e `data`. Responda com HTTP 2xx rapidamente. Falhas são tentadas novamente até oito vezes; depois aparecem como falhas na página de integração.
-
-## Configuração do worker
-
-O endpoint de envio não processa campanhas nem entregas de webhook do cliente em segundo plano. Agende `php worker.php 20` a cada minuto, conforme o guia XAMPP. Um lote processa até 20 destinatários de cada campanha e até 30 webhooks pendentes por execução. Não rode múltiplas cópias agendadas em paralelo.
-
-
-O contrato OpenAPI pode ser baixado na aplicação em **API e integrações** ou consultado em [openapi.yaml](openapi.yaml).
+## Paginação
+`/v1/messages` e `/v1/events` aceitam `?before_id=NUMERO&limit=50`. Máximo 100. `/v1/contacts` usa limite. A resposta pode conter dados pessoais: proteja e aplique retenção.

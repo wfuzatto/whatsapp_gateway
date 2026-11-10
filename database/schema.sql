@@ -1,18 +1,88 @@
-CREATE TABLE IF NOT EXISTS whatsapp_tenants (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,name VARCHAR(180) NOT NULL,slug VARCHAR(100) NOT NULL UNIQUE,status VARCHAR(30) NOT NULL DEFAULT 'active',created_at DATETIME NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_users (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,name VARCHAR(160) NOT NULL,email VARCHAR(190) NOT NULL,password_hash VARCHAR(255) NOT NULL,role VARCHAR(30) NOT NULL DEFAULT 'agent',status VARCHAR(30) NOT NULL DEFAULT 'active',mfa_secret_enc TEXT NULL,mfa_enabled TINYINT(1) NOT NULL DEFAULT 0,created_at DATETIME NOT NULL,UNIQUE KEY uq_user_email(email),KEY ix_users_tenant(tenant_id),CONSTRAINT fk_users_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_tenant_meta (tenant_id BIGINT UNSIGNED PRIMARY KEY,waba_id VARCHAR(100) NULL,phone_number_id VARCHAR(100) NULL,verify_token VARCHAR(190) NULL,access_token_enc TEXT NULL,app_secret_enc TEXT NULL,meta_app_id VARCHAR(100) NULL,updated_at DATETIME NULL,UNIQUE KEY uq_meta_phone(phone_number_id),CONSTRAINT fk_meta_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_media_assets (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,phone_number_id VARCHAR(100) NOT NULL,meta_media_id VARCHAR(190) NOT NULL,mime_type VARCHAR(120) NOT NULL,media_type VARCHAR(30) NOT NULL,filename VARCHAR(255) NOT NULL,created_at DATETIME NOT NULL,UNIQUE KEY uq_media_asset(tenant_id,meta_media_id),KEY ix_media_tenant(tenant_id,id),CONSTRAINT fk_media_asset_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_contacts (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,name VARCHAR(190) NOT NULL,phone VARCHAR(32) NOT NULL,consent_status VARCHAR(30) NOT NULL DEFAULT 'unknown',consent_source VARCHAR(255) NULL,consent_at DATETIME NULL,opted_out_at DATETIME NULL,created_at DATETIME NOT NULL,UNIQUE KEY uq_contact_phone(tenant_id,phone),KEY ix_contacts_tenant(tenant_id),CONSTRAINT fk_contacts_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_conversations (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,contact_id BIGINT UNSIGNED NOT NULL,phone_number_id VARCHAR(100) NOT NULL,status VARCHAR(30) NOT NULL DEFAULT 'open',assignee_id BIGINT UNSIGNED NULL,unread_count INT NOT NULL DEFAULT 0,last_inbound_at DATETIME NULL,last_message_at DATETIME NULL,last_message_preview VARCHAR(255) NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,KEY ix_conv_tenant(tenant_id,status),KEY ix_conv_contact(contact_id),CONSTRAINT fk_conv_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE,CONSTRAINT fk_conv_contact FOREIGN KEY(contact_id) REFERENCES whatsapp_contacts(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_messages (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,conversation_id BIGINT UNSIGNED NOT NULL,direction VARCHAR(10) NOT NULL,type VARCHAR(40) NOT NULL,body MEDIUMTEXT NULL,wamid VARCHAR(190) NULL,media_id VARCHAR(190) NULL,media_filename VARCHAR(255) NULL,media_mime VARCHAR(120) NULL,status VARCHAR(40) NOT NULL,created_at DATETIME NOT NULL,UNIQUE KEY uq_message_wamid(tenant_id,wamid),KEY ix_msg_conversation(tenant_id,conversation_id,id),CONSTRAINT fk_msg_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE,CONSTRAINT fk_msg_conversation FOREIGN KEY(conversation_id) REFERENCES whatsapp_conversations(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_templates (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,name VARCHAR(512) NOT NULL,language VARCHAR(20) NOT NULL,category VARCHAR(30) NOT NULL,body MEDIUMTEXT NOT NULL,status VARCHAR(40) NOT NULL DEFAULT 'PENDING',meta_id VARCHAR(100) NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,UNIQUE KEY uq_template(tenant_id,name,language),CONSTRAINT fk_tpl_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_quick_replies (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,name VARCHAR(120) NOT NULL,body MEDIUMTEXT NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,UNIQUE KEY uq_quick_reply(tenant_id,name),KEY ix_quick_reply_tenant(tenant_id),CONSTRAINT fk_quick_reply_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_campaigns (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,name VARCHAR(190) NOT NULL,template_id BIGINT UNSIGNED NULL,status VARCHAR(30) NOT NULL DEFAULT 'draft',scheduled_at DATETIME NULL,started_at DATETIME NULL,completed_at DATETIME NULL,created_at DATETIME NOT NULL,KEY ix_campaign_tenant(tenant_id,status,scheduled_at),CONSTRAINT fk_campaign_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_campaign_recipients (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,campaign_id BIGINT UNSIGNED NOT NULL,contact_id BIGINT UNSIGNED NOT NULL,status VARCHAR(30) NOT NULL DEFAULT 'pending',wamid VARCHAR(190) NULL,error TEXT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,UNIQUE KEY uq_campaign_contact(campaign_id,contact_id),KEY ix_campaign_queue(tenant_id,status,campaign_id),CONSTRAINT fk_recipient_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE,CONSTRAINT fk_recipient_campaign FOREIGN KEY(campaign_id) REFERENCES whatsapp_campaigns(id) ON DELETE CASCADE,CONSTRAINT fk_recipient_contact FOREIGN KEY(contact_id) REFERENCES whatsapp_contacts(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_api_keys (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,name VARCHAR(120) NOT NULL,key_hash CHAR(64) NOT NULL UNIQUE,key_prefix VARCHAR(24) NOT NULL,scopes VARCHAR(255) NOT NULL,created_at DATETIME NOT NULL,revoked_at DATETIME NULL,CONSTRAINT fk_key_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_tenant_webhooks (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,url VARCHAR(2048) NOT NULL,secret_enc TEXT NOT NULL,events VARCHAR(500) NOT NULL,active TINYINT(1) NOT NULL DEFAULT 1,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,UNIQUE KEY uq_tenant_hook(tenant_id),CONSTRAINT fk_hook_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_webhook_outbox (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,event_key VARCHAR(100) NOT NULL,event_type VARCHAR(80) NOT NULL,payload MEDIUMTEXT NOT NULL,attempts INT NOT NULL DEFAULT 0,next_attempt_at DATETIME NULL,status VARCHAR(24) NOT NULL DEFAULT 'pending',last_error TEXT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,KEY ix_outbox_ready(status,next_attempt_at),KEY ix_outbox_tenant(tenant_id,id),CONSTRAINT fk_outbox_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_webhook_events (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,event_hash CHAR(64) NOT NULL,payload MEDIUMTEXT NOT NULL,created_at DATETIME NOT NULL,UNIQUE KEY uq_event_hash(tenant_id,event_hash),CONSTRAINT fk_event_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_idempotency_keys (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,idem_key VARCHAR(190) NOT NULL,response_json MEDIUMTEXT NOT NULL,created_at DATETIME NOT NULL,UNIQUE KEY uq_idempotency(tenant_id,idem_key),CONSTRAINT fk_idem_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_audit_logs (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT UNSIGNED NOT NULL,user_id BIGINT UNSIGNED NULL,action VARCHAR(100) NOT NULL,details JSON NULL,ip VARCHAR(45) NULL,created_at DATETIME NOT NULL,KEY ix_wg_audit_tenant(tenant_id,id),CONSTRAINT fk_whatsapp_gateway_audit_tenant FOREIGN KEY(tenant_id) REFERENCES whatsapp_tenants(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS whatsapp_login_attempts (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,email VARCHAR(190) NOT NULL,ip VARCHAR(45) NOT NULL,created_at DATETIME NOT NULL,KEY ix_login_attempt(email,ip,created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- Recriacao completa. Execute SOMENTE em uma base MySQL nova e vazia.
+-- MySQL 8+ / MariaDB recente; charset utf8mb4.
+CREATE TABLE accounts (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  waba_id VARCHAR(40) NOT NULL,
+  phone_number_id VARCHAR(40) NOT NULL UNIQUE,
+  token_box TEXT NOT NULL,
+  callback_url VARCHAR(2048) DEFAULT NULL,
+  callback_secret_box TEXT DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_waba (waba_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE api_keys (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  account_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  token_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (account_id) REFERENCES accounts(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE contacts (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  account_id BIGINT UNSIGNED NOT NULL,
+  wa_id VARCHAR(32) NOT NULL,
+  display_name VARCHAR(255) DEFAULT NULL,
+  opt_in_at DATETIME DEFAULT NULL,
+  opt_in_source VARCHAR(255) DEFAULT NULL,
+  last_inbound_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_contact (account_id, wa_id),
+  FOREIGN KEY (account_id) REFERENCES accounts(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE messages (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  account_id BIGINT UNSIGNED NOT NULL,
+  wa_id VARCHAR(32) NOT NULL,
+  direction ENUM('inbound','outbound') NOT NULL,
+  whatsapp_id VARCHAR(255) DEFAULT NULL,
+  message_type VARCHAR(40) NOT NULL,
+  status VARCHAR(30) NOT NULL,
+  payload JSON NOT NULL,
+  meta_response JSON DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_wa_message (account_id, whatsapp_id),
+  INDEX idx_conversation (account_id,wa_id,created_at),
+  FOREIGN KEY (account_id) REFERENCES accounts(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE webhook_events (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  account_id BIGINT UNSIGNED DEFAULT NULL,
+  event_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
+  event_type VARCHAR(80) NOT NULL,
+  payload JSON NOT NULL,
+  received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_event_lookup (account_id, received_at),
+  FOREIGN KEY (account_id) REFERENCES accounts(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE jobs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  account_id BIGINT UNSIGNED NOT NULL,
+  kind ENUM('send','callback') NOT NULL,
+  idempotency_key VARCHAR(180) NOT NULL,
+  payload JSON NOT NULL,
+  status ENUM('queued','processing','retry','done','failed','uncertain') NOT NULL DEFAULT 'queued',
+  attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  max_attempts SMALLINT UNSIGNED NOT NULL DEFAULT 5,
+  next_attempt_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_error VARCHAR(1000) DEFAULT NULL,
+  response JSON DEFAULT NULL,
+  locked_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_job (account_id, kind, idempotency_key),
+  INDEX idx_claim (status,next_attempt_at),
+  FOREIGN KEY (account_id) REFERENCES accounts(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE audit_logs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  account_id BIGINT UNSIGNED DEFAULT NULL,
+  action VARCHAR(100) NOT NULL,
+  details JSON NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_audit (account_id, created_at),
+  FOREIGN KEY (account_id) REFERENCES accounts(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

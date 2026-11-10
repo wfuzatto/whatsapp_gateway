@@ -1,10 +1,8 @@
 Options -Indexes
-<FilesMatch "^(\.env|config\.local\.php|composer\.(json|lock)|schema\.sql|README\.md)$">
-  Require all denied
-</FilesMatch>
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^(.+)$ index.php?r=$1 [QSA,L]
-</IfModule>
+RewriteEngine On
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+RewriteRule ^(\.git|\.env|src|database|bin|docs|tests|\.github|storage)(/|$) - [F,L,NC]
+RewriteRule ^(README|LICENSE|composer\.|phpunit\.|\.gitignore) - [F,L,NC]
+RewriteRule ^public/ - [L]
+RewriteRule ^(.*)$ public/$1 [L,QSA]
