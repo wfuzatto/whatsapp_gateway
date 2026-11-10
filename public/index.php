@@ -168,6 +168,34 @@ try {
     }
     if (preg_match('~^/v1/templates/([0-9]+)$~D',$path,$m) && $method === 'POST')
         response(200,Graph::call($account,'POST',$m[1],requestJson()));
+    if ($path === '/v1/phone' && $method === 'GET')
+        response(200,Graph::call($account,'GET',$phone,null,
+            ['fields'=>'display_phone_number,verified_name,quality_rating,status']));
+    if ($path === '/v1/phone/register' && $method === 'POST') {
+        $body = requestJson();
+        $pin = $body['pin'] ?? null;
+        if (!is_string($pin) || !preg_match('/^[0-9]{6}$/D',$pin)) throw new HttpError('6-digit registration PIN required');
+        audit($accountId,'phone.register.requested',['phone_number_id'=>$phone]);
+        response(200,Graph::call($account,'POST',$phone.'/register',
+            ['messaging_product'=>'whatsapp','pin'=>$pin]));
+    }
+    if ($path === '/v1/phone/deregister' && $method === 'POST') {
+        $body = requestJson();
+        if (($body['confirm'] ?? '') !== 'DEREGISTER') throw new HttpError('Explicit confirm=DEREGISTER required',422);
+        audit($accountId,'phone.deregister.requested',['phone_number_id'=>$phone]);
+        response(200,Graph::call($account,'POST',$phone.'/deregister'));
+    }
+    if ($path === '/v1/webhook-subscriptions') {
+        if ($method === 'GET') response(200,Graph::call($account,'GET',$waba.'/subscribed_apps'));
+        if ($method === 'POST') {
+            audit($accountId,'waba.subscribe.requested');
+            response(200,Graph::call($account,'POST',$waba.'/subscribed_apps'));
+        }
+        if ($method === 'DELETE') {
+            audit($accountId,'waba.unsubscribe.requested');
+            response(200,Graph::call($account,'DELETE',$waba.'/subscribed_apps'));
+        }
+    }
     if ($path === '/v1/phone-numbers' && $method === 'GET')
         response(200,Graph::call($account,'GET',$waba.'/phone_numbers'));
     if ($path === '/v1/business-profile') {

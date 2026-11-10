@@ -23,6 +23,10 @@ Uma chave pertence a um único número de WhatsApp Business. O `META_APP_SECRET`
 | GET/DELETE | /v1/media/{media_id} | Metadados/exclusão na Meta |
 | GET/POST/DELETE | /v1/templates | Listagem, criação, exclusão ?name= |
 | POST | /v1/templates/{template_id} | Atualização via Meta Graph |
+| GET | /v1/phone | Consulta do número comercial |
+| POST | /v1/phone/register | Registrar número com PIN de 6 dígitos |
+| POST | /v1/phone/deregister | Desregistrar (confirm=DEREGISTER) |
+| GET/POST/DELETE | /v1/webhook-subscriptions | Gerenciar inscrição do app no WABA |
 | GET | /v1/phone-numbers | Números do WABA |
 | GET/POST | /v1/business-profile | Perfil do número |
 | GET/POST | /v1/flows | Flows Graph |
