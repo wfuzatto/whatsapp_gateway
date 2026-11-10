@@ -9,6 +9,8 @@
 5. No `httpd.conf`, confirme que `mod_rewrite` está ativo e que a configuração de `htdocs` permite `AllowOverride All`. O `.htaccess` do projeto protege diretórios internos e impede listagem de arquivos.
 6. No phpMyAdmin (`http://localhost/phpmyadmin`), crie o banco `whatsapp_gateway`, codificação `utf8mb4` e ordenação `utf8mb4_unicode_ci`. Para XAMPP local, `root` normalmente não tem senha; em qualquer servidor acessível pela rede, crie um usuário MySQL dedicado com senha forte e apenas permissões para esse banco.
 
+Todas as 18 tabelas criadas pelo instalador recebem o prefixo `whatsapp_`. O **nome do banco** (`whatsapp_gateway`) é independente desse prefixo. Para migrar instalações antigas, consulte [migrações](../database/migrations/README.md); não execute a migração em bancos compartilhados.
+
 ## Instalar a aplicação
 
 1. Abra `http://localhost/whatsapp_api/`.
