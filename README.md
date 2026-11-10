@@ -31,6 +31,10 @@ Não existe usuário ou senha padrão da plataforma. O primeiro administrador e 
 - Campanhas para contatos autorizados, modelos sem variáveis numéricas e processamento pelo worker PHP.
 - Painel de instalação, auditoria e instruções de operação.
 
+## Padrão das tabelas
+
+As **18 tabelas do sistema** usam o prefixo obrigatório `whatsapp_` (ex.: `whatsapp_tenants`, `whatsapp_contacts` e `whatsapp_messages`). O nome do banco continua podendo ser `whatsapp_gateway`. Para uma instalação nova, crie um banco **vazio**: o walkthrough cria as tabelas já com o prefixo correto. Se deseja preservar dados de uma instalação anterior, consulte [migrações](database/migrations/README.md) e nunca renomeie tabelas genéricas em um banco compartilhado com outros sistemas.
+
 ## Requisitos
 
 - PHP 8.1 ou superior com `pdo_mysql`, `curl`, `openssl`, `mbstring`, `fileinfo`, `json` e `iconv`.
