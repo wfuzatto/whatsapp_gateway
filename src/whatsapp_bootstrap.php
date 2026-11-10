@@ -5,7 +5,10 @@ ini_set('display_errors', '0');
 error_reporting(E_ALL);
 
 function loadEnvironment(): void {
-    $file = dirname(__DIR__) . '/.env';
+    // Preferir .env um nivel ACIMA do diretório publico (ex.: /home/usuario/.env).
+    // Mantem fallback legado dentro da raiz PHP, protegido pelo Apache.
+    $file = dirname(__DIR__, 2) . '/.env';
+    if (!is_file($file)) $file = dirname(__DIR__) . '/.env';
     if (!is_file($file)) return;
     foreach (file($file, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
         $line = trim($line);

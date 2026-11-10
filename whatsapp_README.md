@@ -18,7 +18,7 @@ O **prefixo obrigatório** dos 9 nomes das tabelas é `whatsapp_`. Os arquivos c
 ## Instalação limpa
 1. PHP 8.2+ com `pdo_mysql`, `curl`, `sodium`, `fileinfo`; MySQL 8.0+; servidor HTTPS.
 2. **Crie um banco vazio separado.** Importe `database/whatsapp_schema.sql`. **Não rode isso por cima do banco antigo**: ainda não há migração automática nem dedução segura de qual conta antiga pertence a qual tenant.
-3. Copie `whatsapp_env.example` para `.env` (fora do Git) e preencha variáveis. Gere `MASTER_KEY_BASE64` com `php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"`.
+3. Copie `whatsapp_env.example` para `.env` no diretório **acima de `/public_html/`** (fora do Git e do diretório público) e preencha variáveis. Há fallback legado para `/public_html/.env`, mas não é o local recomendado. Gere `MASTER_KEY_BASE64` com `php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"`.
 4. Configure Apache DocumentRoot em `public/`, ou use o `.htaccess` da raiz em XAMPP. O script de entrada agora é `public/whatsapp_index.php`.
 5. Cadastre os clientes e números pelo CLI (tokens da Meta são pedidos via stdin, nunca argumentos):
 ```bash
