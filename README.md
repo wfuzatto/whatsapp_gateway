@@ -2,6 +2,10 @@
 
 Plataforma web multicliente em PHP e MySQL para uso com WhatsApp Cloud API oficial. Foi preparada para instalação local no XAMPP e inclui painel de clientes, atendimento, templates, campanhas em fila, API REST, webhooks de entrada e retorno, auditoria e guia de ativação Meta.
 
+## Assistente visual de instalação
+
+Na primeira execução, abra http://localhost/whatsapp_api/. O **walkthrough de cinco etapas** orienta requisitos do PHP, conexão MySQL, administrador, endereço público e criação da plataforma. Para reinstalar após apagar um banco, faça backup e retire a configuração local antiga. Leia [GUIA_INSTALACAO_GUIADA.md](docs/GUIA_INSTALACAO_GUIADA.md).
+
 ## Instalação rápida no XAMPP
 
 1. Instale e inicie Apache e MySQL no XAMPP.
