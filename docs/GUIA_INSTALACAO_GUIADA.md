@@ -10,6 +10,8 @@ O projeto possui um assistente visual de cinco etapas, disponível automaticamen
 4. Crie o banco vazio chamado whatsapp_gateway, com collation utf8mb4_unicode_ci. Não importe schema.sql manualmente.
 5. Abra http://localhost/whatsapp_api/. Caso a pasta tenha outro nome, ajuste a URL.
 
+**Nomes das tabelas:** o walkthrough cria 18 tabelas com o prefixo `whatsapp_`, embora o banco possa se chamar `whatsapp_gateway`. Não reutilize um banco com tabelas de outros sistemas. Para preservar registros antigos, veja [migrações](../database/migrations/README.md).
+
 ## Cinco etapas
 
 1. **Requisitos:** checa PHP, extensões, PDO MySQL, schema.sql, proteção HTTP e escrita em storage.
