@@ -61,3 +61,15 @@ Antes de templates, registre consentimento por `POST /v1/contacts/consent`. Text
 Testes: `php tests/whatsapp_smoke.php`. O GitHub Actions executa os testes de integração multitenant com MySQL 8 isolado.
 
 Fontes oficiais: https://www.postman.com/meta/whatsapp-business-platform/overview e https://developers.facebook.com/docs/whatsapp/cloud-api/overview
+
+
+## Teste de envio para FTP sem publicar o site
+
+O GitHub Actions disponibiliza o workflow manual `WhatsApp - Testar envio ao FTP (FTPS)`.
+Pode ser executado em **Actions → WhatsApp - Testar envio ao FTP (FTPS) → Run workflow**. O primeiro push do workflow também inicia um teste automático.
+
+**Secrets necessários:** `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`; `FTP_PORT=21` e `FTP_PROTOCOL=ftps` são aceitos (na ausência dos opcionais, usam-se esses padrões). O destino previsto é `ftp.zapapi.inf.br`, com usuário `zapapi1`.
+
+O script `bin/whatsapp_ftp_test.sh` exige **FTPS explícito com certificado TLS validado**, testa a gravação e o download de um marcador e, se bem-sucedido, envia todos os arquivos versionados para uma **pasta única de teste** `whatsapp_gateway_teste/<run>-<tentativa>-<commit>` a partir da raiz visível ao FTP. Não escreve na pasta do site, não altera o banco, não utiliza o `FTP_PATH` nem cria ou modifica arquivos `.env` remotos. Se o servidor não suportar FTPS, o teste falhará sem transmitir a senha por FTP desprotegido.
+
+A pasta física informada pelo provedor (`/home/zapapi1/`) pode ser diferente da raiz visível na sessão FTP. Publicação real no site requer confirmação posterior do diretório e do protocolo. **Credenciais de FTP compartilhadas em mensagens devem ser rotacionadas antes do uso em produção**.
