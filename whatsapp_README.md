@@ -78,3 +78,8 @@ O workflow [WhatsApp - Publicar FTP em public_html](https://github.com/wfuzatto/
 - Importante: os arquivos do PHP ainda exigem um `.env` privado configurado no servidor e o banco `whatsapp_` preparado; publicar arquivos nao configura credenciais nem executa migracoes automaticamente.
 
 **Alerta:** FTP comum transmite senha e arquivos sem TLS. Como a senha de FTP ja foi compartilhada em mensagens e pode ser a mesma do banco, use uma senha exclusiva e rotacione-a quanto antes.
+
+
+## Página inicial de diagnóstico
+
+A rota `GET /` apresenta uma página pública informativa em `public/whatsapp_home.php`, sem carregar credenciais ou consultar o banco. O status `GET /health` confirma apenas a disponibilidade do endpoint HTTP/PHP; **não valida** a conexão com MySQL, a API Meta ou a configuração `.env`. Essa página não é o painel de administração: login, gestão visual de tenants e inbox continuam pendentes no roadmap.

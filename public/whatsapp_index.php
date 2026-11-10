@@ -46,6 +46,10 @@ try {
     }
     $path = rtrim($path,'/') ?: '/';
 
+    if ($method === 'GET' && $path === '/') {
+        require __DIR__ . '/whatsapp_home.php';
+        exit;
+    }
     if ($method === 'GET' && $path === '/health') response(200,['status'=>'ok','gateway'=>'cloud-api','version'=>'1.0']);
     if ($path === '/webhooks/meta') {
         if ($method === 'GET') {
