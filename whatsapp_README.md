@@ -63,13 +63,18 @@ Testes: `php tests/whatsapp_smoke.php`. O GitHub Actions executa os testes de in
 Fontes oficiais: https://www.postman.com/meta/whatsapp-business-platform/overview e https://developers.facebook.com/docs/whatsapp/cloud-api/overview
 
 
-## Teste de envio para FTP sem publicar o site
+## Publicacao FTP em /public_html/
 
-O GitHub Actions disponibiliza o workflow manual `WhatsApp - Testar envio ao FTP comum`.
-Pode ser executado em **Actions → WhatsApp - Testar envio ao FTP comum → Run workflow**. O primeiro push do workflow também inicia um teste automático.
+O workflow [WhatsApp - Publicar FTP em public_html](https://github.com/wfuzatto/whatsapp_gateway/actions/workflows/whatsapp_ftp_test.yml) transfere os arquivos da aplicacao para a pasta **/public_html/** (nao para a raiz FTP). Esta tarefa e acionada manualmente em Actions > Run workflow e quando o proprio workflow e atualizado.
 
-**Secrets necessários:** `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`; `FTP_PORT=21` e `FTP_PROTOCOL=ftp` são aceitos (na ausência dos opcionais, usam-se esses padrões). O destino previsto é `ftp.zapapi.inf.br`, com usuário `zapapi1`.
+- Destino: `ftp.zapapi1.hospedagemdesites.ws:21/public_html/`
+- Protocolo: `ftp` sem criptografia, por solicitacao do administrador.
+- Usuario e senha: `FTP_USERNAME` e `FTP_PASSWORD` guardados em GitHub Actions Secrets.
+- Antes de substituir um arquivo existente, cria-se backup ZIP fora do diretorio publico em `/whatsapp_gateway_backups/`.
+- Preserva outros arquivos e pastas no servidor; nao apaga nada do site.
+- Envia somente os arquivos de execucao: `.htaccess`, `public/`, `src/`, scripts administrativos `bin/` e esquema `database/whatsapp_schema.sql`. Nao publica `.github`, testes, documentacao, nem arquivos `.env`.
+- Confere com download e SHA256 cada arquivo enviado.
+- Se houver `index.php`, `index.html` ou WordPress na raiz, nao sobrescreve um projeto alheio e interrompe o deploy.
+- Importante: os arquivos do PHP ainda exigem um `.env` privado configurado no servidor e o banco `whatsapp_` preparado; publicar arquivos nao configura credenciais nem executa migracoes automaticamente.
 
-O script `bin/whatsapp_ftp_test.sh` usa **FTP comum (sem TLS; credenciais e conteúdo trafegam sem criptografia)**, testa a gravação e o download de um marcador e, se bem-sucedido, envia todos os arquivos versionados para uma **pasta única de teste** `whatsapp_gateway_teste/<run>-<tentativa>-<commit>` a partir da raiz visível ao FTP. Não escreve na pasta do site, não altera o banco, não utiliza o `FTP_PATH` nem cria ou modifica arquivos `.env` remotos. **Aviso de segurança:** o servidor aparentemente não suporta FTPS. Use credenciais de FTP exclusivas, diferentes da senha do MySQL, e migre para SFTP/FTPS assim que disponível.
-
-A pasta física informada pelo provedor (`/home/zapapi1/`) pode ser diferente da raiz visível na sessão FTP. Publicação real no site requer confirmação posterior do diretório e do protocolo. **Credenciais de FTP compartilhadas em mensagens devem ser rotacionadas antes do uso em produção**.
+**Alerta:** FTP comum transmite senha e arquivos sem TLS. Como a senha de FTP ja foi compartilhada em mensagens e pode ser a mesma do banco, use uma senha exclusiva e rotacione-a quanto antes.

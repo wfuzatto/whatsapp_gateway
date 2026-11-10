@@ -1,8 +1,9 @@
-name: WhatsApp - Testar envio ao FTP comum
+name: WhatsApp - Publicar FTP em public_html
 
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - .github/workflows/whatsapp_ftp_test.yml
 
@@ -10,30 +11,30 @@ permissions:
   contents: read
 
 concurrency:
-  group: whatsapp-ftp-test
+  group: whatsapp-ftp-public-html
   cancel-in-progress: false
 
 jobs:
-  upload-to-staging:
-    name: Teste de FTP comum na pasta isolada
+  deploy:
+    name: Publicar arquivos de execucao em /public_html/
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
-      - name: Baixar codigo do repositorio
+      - name: Baixar codigo
         uses: actions/checkout@v4
 
-      - name: Conferir arquivos PHP
+      - name: Conferir sintaxe PHP
         run: find . -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 
-      - name: Validar sintaxe do script de FTP
-        run: bash -n bin/whatsapp_ftp_test.sh
+      - name: Conferir sintaxe Python
+        run: python3 -c "import ast; ast.parse(open('bin/whatsapp_ftp_public_html.py', encoding='utf-8').read())"
 
-      - name: Enviar arquivos para pasta temporaria isolada via FTP comum
+      - name: Publicar em /public_html/ (com backup de arquivos existentes)
         env:
           FTP_SERVER: ftp.zapapi1.hospedagemdesites.ws
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-          FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_PORT: '21'
           FTP_PROTOCOL: ftp
-        shell: bash
-        run: bash bin/whatsapp_ftp_test.sh
+          FTP_PATH: /public_html/
+        run: python3 bin/whatsapp_ftp_public_html.py
