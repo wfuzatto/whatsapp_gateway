@@ -98,6 +98,8 @@ function bearerContext(): array {
         FROM whatsapp_api_keys k
         JOIN whatsapp_tenants t ON t.id=k.tenant_id
         WHERE k.token_hash=? AND k.active=1 AND t.status='active'
+        AND (NOT EXISTS(SELECT 1 FROM whatsapp_subscriptions s WHERE s.tenant_id=t.id)
+             OR EXISTS(SELECT 1 FROM whatsapp_subscriptions s WHERE s.tenant_id=t.id AND s.status='active'))
         AND (k.account_id IS NULL OR EXISTS (
              SELECT 1 FROM whatsapp_accounts a WHERE a.tenant_id=k.tenant_id
                AND a.id=k.account_id AND a.status='active')) LIMIT 1");

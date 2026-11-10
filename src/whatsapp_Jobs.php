@@ -30,9 +30,10 @@ final class Jobs {
         try {
             $s = $pdo->query("SELECT j.* FROM whatsapp_jobs j
                               JOIN whatsapp_tenants t ON t.id=j.tenant_id AND t.status='active'
+                              LEFT JOIN whatsapp_subscriptions s ON s.tenant_id=j.tenant_id
                               JOIN whatsapp_accounts a ON a.id=j.account_id
                                 AND a.tenant_id=j.tenant_id AND a.status='active'
-                              WHERE j.status IN ('queued','retry')
+                              WHERE (s.id IS NULL OR s.status='active') AND j.status IN ('queued','retry')
                               AND j.next_attempt_at<=UTC_TIMESTAMP() ORDER BY j.id
                               LIMIT 1 FOR UPDATE SKIP LOCKED");
             $job = $s->fetch();

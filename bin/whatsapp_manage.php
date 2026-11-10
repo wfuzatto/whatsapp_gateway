@@ -14,7 +14,12 @@ function usage(): never {
     echo "  php bin/whatsapp_manage.php account:token:rotate PHONE_NUMBER_ID\n";
     echo "  php bin/whatsapp_manage.php key:add TENANT_SLUG LABEL [PHONE_NUMBER_ID]\n";
     echo "  php bin/whatsapp_manage.php key:revoke KEY_ID\n";
-    echo "  php bin/whatsapp_manage.php callback:set PHONE_NUMBER_ID HTTPS_URL\n";
+    echo "  php bin/whatsapp_manage.php callback:set PHONE_NUMBER_ID HTTPS_URL\\n";
+    echo "  php bin/whatsapp_manage.php plan:list\\n";
+    echo "  php bin/whatsapp_manage.php plan:price PLAN_SLUG VALOR_EM_CENTAVOS\\n";
+    echo "  php bin/whatsapp_manage.php subscription:list\\n";
+    echo "  php bin/whatsapp_manage.php subscription:activate TENANT_SLUG\\n";
+    echo "  php bin/whatsapp_manage.php subscription:suspend TENANT_SLUG\\n";
     exit(1);
 }
 function secretFromStdin(string $prompt): string {
@@ -66,6 +71,21 @@ try {
         $pdo=db();
         $pdo->beginTransaction();
         try {
+            // Serializar vinculos para impedir ultrapassar a cota do plano.
+            $lock=$pdo->prepare('SELECT id FROM whatsapp_tenants WHERE id=? FOR UPDATE');
+            $lock->execute([$t['id']]);
+            $plan=$pdo->prepare("SELECT p.max_numbers,s.status FROM whatsapp_subscriptions s
+                JOIN whatsapp_plans p ON p.id=s.plan_id WHERE s.tenant_id=?");
+            $plan->execute([$t['id']]);
+            $activePlan=$plan->fetch();
+            if ($activePlan) {
+                if($activePlan['status']!=='active')
+                    throw new RuntimeException('Assinatura pendente: nao e possivel conectar numeros ainda');
+                $count=$pdo->prepare('SELECT COUNT(*) FROM whatsapp_accounts WHERE tenant_id=?');
+                $count->execute([$t['id']]);
+                if((int)$count->fetchColumn()>=(int)$activePlan['max_numbers'])
+                    throw new RuntimeException('Limite de numeros do plano atingido');
+            }
             $s=$pdo->prepare('SELECT tenant_id FROM whatsapp_wabas WHERE waba_id=? FOR UPDATE');
             $s->execute([$waba]);
             $owner=$s->fetch();
@@ -120,6 +140,28 @@ try {
         $st=db()->prepare('UPDATE whatsapp_api_keys SET active=0 WHERE id=?');
         $st->execute([$argv[2]]);
         echo "Revogadas: ".$st->rowCount()."\n";
+    } elseif ($cmd==='plan:list' && count($argv)===2) {
+        foreach(db()->query("SELECT slug,title,price_cents,max_numbers,is_public FROM whatsapp_plans ORDER BY sort_order") as $plan)
+            echo jsonString($plan)."\\n";
+    } elseif ($cmd==='plan:price' && count($argv)===4) {
+        if(!ctype_digit($argv[3])||(int)$argv[3]>100000000)
+            throw new RuntimeException('Informe o valor em centavos, sem virgula ou ponto');
+        $s=db()->prepare('UPDATE whatsapp_plans SET price_cents=? WHERE slug=?');
+        $s->execute([(int)$argv[3],$argv[2]]);
+        if(!$s->rowCount())throw new RuntimeException('Plano inexistente ou preco sem alteracao');
+        echo "Preco da proposta atualizado (novos cadastros).\\n";
+    } elseif ($cmd==='subscription:list' && count($argv)===2) {
+        foreach(db()->query("SELECT t.slug,t.name,p.title AS plan,s.price_cents_snapshot,s.status,s.created_at
+            FROM whatsapp_subscriptions s JOIN whatsapp_tenants t ON t.id=s.tenant_id
+            JOIN whatsapp_plans p ON p.id=s.plan_id ORDER BY s.id DESC") as $sub)
+            echo jsonString($sub)."\\n";
+    } elseif (($cmd==='subscription:activate' || $cmd==='subscription:suspend') && count($argv)===3) {
+        $t=requiredTenant($argv[2]);
+        $state=$cmd==='subscription:activate'?'active':'suspended';
+        $s=db()->prepare('UPDATE whatsapp_subscriptions SET status=?,started_at=COALESCE(started_at,UTC_TIMESTAMP()) WHERE tenant_id=?');
+        $s->execute([$state,$t['id']]);
+        if(!$s->rowCount())throw new RuntimeException('Assinatura inexistente ou sem mudanca');
+        echo "Assinatura atualizada: ".$state."\\n";
     } elseif ($cmd==='callback:set' && count($argv)===4) {
         $a=requiredAccount($argv[2]);
         $url=$argv[3];$p=parse_url($url);

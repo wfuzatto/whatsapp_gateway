@@ -59,3 +59,5 @@ jobs:
         run: php tests/whatsapp_smoke.php
       - name: MySQL multi-tenant integration tests
         run: php tests/whatsapp_integration.php
+      - name: Portal registration/login HTTP tests
+        run: bash tests/whatsapp_portal_http.sh

@@ -83,3 +83,16 @@ O workflow [WhatsApp - Publicar FTP em public_html](https://github.com/wfuzatto/
 ## Página inicial de diagnóstico
 
 A rota `GET /` apresenta uma página pública informativa em `public/whatsapp_home.php`, sem carregar credenciais ou consultar o banco. O status `GET /health` confirma apenas a disponibilidade do endpoint HTTP/PHP; **não valida** a conexão com MySQL, a API Meta ou a configuração `.env`. Essa página não é o painel de administração: login, gestão visual de tenants e inbox continuam pendentes no roadmap.
+
+## Portal público, planos e autocadastro
+- `GET /`: landing page comercial responsiva e planos; os valores são **propostas de mensalidade**, não preços oficiais finais.
+- `GET /cadastro` / `POST /cadastro`: formulário com CSRF, senha protegida por hash, proteção de tentativas e transação MySQL de **tenant + owner + assinatura**.
+- `GET /entrar` / `POST /entrar`: autenticação por sessão segura, com redirecionamento ao painel.
+- `GET /painel`: visão isolada do tenant e status de assinatura; `POST /sair`: logout.
+- Os planos iniciais de exemplo são Essencial R$ 79/mês (1 número), Profissional R$ 199/mês (3 números) e Escala R$ 399/mês (10 números). Os preços devem ser aprovados antes de comercialização; tarifas Meta não incluídas.
+- A assinatura nasce em `pending_activation`, **sem cobrança ou ativação automática**; o administrador pode aprová-la com `php bin/whatsapp_manage.php subscription:activate TENANT_SLUG` após validação comercial.
+- Os valores públicos vêm da tabela `whatsapp_plans`, editáveis com `php bin/whatsapp_manage.php plan:price SLUG CENTAVOS`. O preço selecionado fica registrado na assinatura como snapshot para consulta.
+- Instalação nova: importe `database/whatsapp_schema.sql`. Banco existente com as nove tabelas anteriores: aplique **apenas** `database/whatsapp_migration_portal.sql` uma vez. Não importe os dois scripts no mesmo banco.
+- O cadastro só é habilitado quando o banco e o catálogo de planos estão disponíveis. Não exponha dados do banco ou segredos em repositório público nem utilize FTP comum para novas senhas.
+
+A ativação de número, pagamentos automáticos, e-mail de confirmação e caixa de entrada visual ainda não estão disponíveis. Não confunda a landing de planos com uma plataforma BSP completa.
