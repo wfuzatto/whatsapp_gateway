@@ -9,7 +9,7 @@ server_pid=$!
 cleanup() { kill "$server_pid" 2>/dev/null || true; rm -rf "$tmp"; }
 trap cleanup EXIT
 for i in $(seq 1 35); do
- if curl -fsS "$host/health" > /dev/null; then break; fi
+ if curl -fsS "$host/health" > /dev/null 2>&1; then break; fi
  sleep 0.3
 done
 curl -fsS "$host/" -o "$tmp/landing"
@@ -73,5 +73,6 @@ code="$(curl -sS -o /dev/null -w '%{http_code}' -b "$tmp/a.jar" -c "$tmp/a.jar" 
  --data-urlencode 'email=cliente1@portal-test.invalid' \
  --data-urlencode 'password=SenhaForteEmCI789')"
 [[ "$code" == "303" ]]
-curl -fsS -b "$tmp/a.jar" "$host/painel" | grep -q 'Empresa Sol A'
+curl -fsS -b "$tmp/a.jar" "$host/painel" -o "$tmp/painel-login"
+grep -q 'Empresa Sol A' "$tmp/painel-login"
 echo "OK: logout e login"
