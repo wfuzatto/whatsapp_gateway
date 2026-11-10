@@ -141,12 +141,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $admin = $wizard['administrator'];
             $pdo->beginTransaction();
             try {
-                $pdo->prepare('INSERT INTO tenants(name,slug,status,created_at) VALUES(?,?,?,NOW())')
+                $pdo->prepare('INSERT INTO whatsapp_tenants(name,slug,status,created_at) VALUES(?,?,?,NOW())')
                     ->execute([$admin['company'], bin2hex(random_bytes(8)), 'active']);
                 $tenantId = (int)$pdo->lastInsertId();
-                $pdo->prepare('INSERT INTO users(tenant_id,name,email,password_hash,role,status,created_at) VALUES(?,?,?,?,?,?,NOW())')
+                $pdo->prepare('INSERT INTO whatsapp_users(tenant_id,name,email,password_hash,role,status,created_at) VALUES(?,?,?,?,?,?,NOW())')
                     ->execute([$tenantId, $admin['name'], $admin['email'], $admin['password_hash'], 'platform_admin', 'active']);
-                $pdo->prepare('INSERT INTO tenant_meta(tenant_id,updated_at) VALUES(?,NOW())')->execute([$tenantId]);
+                $pdo->prepare('INSERT INTO whatsapp_tenant_meta(tenant_id,updated_at) VALUES(?,NOW())')->execute([$tenantId]);
                 $pdo->commit();
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
