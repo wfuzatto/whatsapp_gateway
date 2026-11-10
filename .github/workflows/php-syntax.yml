@@ -1,12 +1,11 @@
-name: PHP syntax check
+name: PHP syntax and table prefix
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 jobs:
-  php-lint:
+  php-check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -16,3 +15,5 @@ jobs:
         run: |
           php -v
           find . -type f -name '*.php' -not -path './storage/*' -print0 | xargs -0 -n 1 php -l
+      - name: Verify whatsapp_ table prefix in schema and PHP
+        run: php tests/check_table_prefix.php
