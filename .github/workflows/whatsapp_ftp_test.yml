@@ -30,7 +30,7 @@ jobs:
 
       - name: Enviar arquivos para pasta temporaria isolada via FTPS
         env:
-          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_SERVER: ftp.zapapi1.hospedagemdesites.ws
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_PORT: ${{ secrets.FTP_PORT }}

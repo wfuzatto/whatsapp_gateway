@@ -17,7 +17,7 @@ if [[ "$protocol" != "ftps" && "$protocol" != "ftps-explicit" && "$protocol" != 
   echo "::error::FTP_PROTOCOL deve ser ftps (FTPS explicito na porta 21). FTP simples e bloqueado por seguranca."
   exit 1
 fi
-if [[ "$FTP_SERVER" != "ftp.zapapi.inf.br" || "$FTP_USERNAME" != "zapapi1" ]]; then
+if [[ "$FTP_SERVER" != "ftp.zapapi1.hospedagemdesites.ws" || "$FTP_USERNAME" != "zapapi1" ]]; then
   echo "::error::Servidor/usuario diferente do destino previsto para este teste. Interrompido sem enviar arquivos."
   exit 1
 fi
