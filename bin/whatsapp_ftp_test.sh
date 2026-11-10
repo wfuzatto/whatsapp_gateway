@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Envia os arquivos versionados a uma pasta NOVA no FTP do usuario.
-# Nao faz deploy no site e NAO utiliza FTP sem criptografia.
+# Nao faz deploy no site. Usa FTP comum (sem TLS), conforme solicitado.
+# ATENCAO: FTP em texto claro expoe credenciais e arquivos na rede.
 set -Eeuo pipefail
 umask 077
 
@@ -11,10 +12,10 @@ for key in FTP_SERVER FTP_USERNAME FTP_PASSWORD; do
   fi
 done
 
-protocol="${FTP_PROTOCOL:-ftps}"
+protocol="${FTP_PROTOCOL:-ftp}"
 protocol="${protocol,,}"
-if [[ "$protocol" != "ftps" && "$protocol" != "ftps-explicit" && "$protocol" != "explicit-ftps" ]]; then
-  echo "::error::FTP_PROTOCOL deve ser ftps (FTPS explicito na porta 21). FTP simples e bloqueado por seguranca."
+if [[ "$protocol" != "ftp" ]]; then
+  echo "::error::FTP_PROTOCOL deve ser ftp para este teste (porta 21, sem TLS)."
   exit 1
 fi
 if [[ "$FTP_SERVER" != "ftp.zapapi1.hospedagemdesites.ws" || "$FTP_USERNAME" != "zapapi1" ]]; then
@@ -23,7 +24,7 @@ if [[ "$FTP_SERVER" != "ftp.zapapi1.hospedagemdesites.ws" || "$FTP_USERNAME" != 
 fi
 port="${FTP_PORT:-21}"
 if [[ "$port" != "21" ]]; then
-  echo "::error::Este teste foi configurado exclusivamente para FTPS explicito na porta 21."
+  echo "::error::Este teste foi configurado exclusivamente para FTP comum na porta 21."
   exit 1
 fi
 if ! command -v curl >/dev/null 2>&1; then
@@ -49,28 +50,28 @@ printf 'machine %s login %s password "%s"\n' "$FTP_SERVER" "$FTP_USERNAME" "$pas
 ftp_upload() {
   local source="$1" remote="$2"
   curl --silent --show-error --fail --retry 1 --retry-delay 1 \
-    --proto '=ftp' --ssl-reqd --ftp-pasv --ftp-create-dirs \
+    --proto '=ftp' --ftp-pasv --ftp-create-dirs \
     --netrc-file "$netrc" --connect-timeout 20 --max-time 90 \
     --upload-file "$source" "${base}/${remote}"
 }
 ftp_download() {
   local remote="$1" target="$2"
   curl --silent --show-error --fail --retry 1 --retry-delay 1 \
-    --proto '=ftp' --ssl-reqd --ftp-pasv \
+    --proto '=ftp' --ftp-pasv \
     --netrc-file "$netrc" --connect-timeout 20 --max-time 90 \
     --output "$target" "${base}/${remote}"
 }
 
-printf 'Teste FTPS WhatsApp Gateway\ncommit=%s\nrun=%s\n' \
+printf 'Teste FTP WhatsApp Gateway\ncommit=%s\nrun=%s\n' \
   "${GITHUB_SHA:-local}" "${GITHUB_RUN_ID:-manual}" > "$marker"
-echo "Iniciando teste FTPS criptografado. Destino: ${destination}"
+echo "Iniciando teste FTP comum (sem criptografia). Destino: ${destination}"
 ftp_upload "$marker" whatsapp_teste_conexao.txt
 ftp_download whatsapp_teste_conexao.txt "$received"
 if ! cmp -s "$marker" "$received"; then
   echo "::error::Arquivo de teste enviado, mas verificacao de download falhou."
   exit 1
 fi
-echo "Conexao, autenticacao, gravacao e leitura FTPS OK."
+echo "Conexao, autenticacao, gravacao e leitura FTP OK."
 
 count=0
 while IFS= read -r -d '' file; do
@@ -84,12 +85,12 @@ while IFS= read -r -d '' file; do
   count=$((count + 1))
 done < <(git ls-files -z)
 
-echo "Envio FTPS concluido: ${count} arquivos do Git, isolados em ${destination}."
+echo "Envio FTP concluido: ${count} arquivos do Git, isolados em ${destination}."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
-    echo '### Teste FTPS do WhatsApp Gateway'
+    echo '### Teste FTP do WhatsApp Gateway'
     echo
-    echo '- Conexao FTPS explicito: **OK**'
+    echo '- Conexao FTP sem criptografia: **OK**'
     echo '- Upload/download do marcador: **OK**'
     echo "- Arquivos enviados: **${count}**"
     echo "- Pasta de teste relativa a raiz FTP: \`${destination}\`"

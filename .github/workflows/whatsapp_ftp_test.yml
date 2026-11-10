@@ -1,4 +1,4 @@
-name: WhatsApp - Testar envio ao FTP (FTPS)
+name: WhatsApp - Testar envio ao FTP comum
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   upload-to-staging:
-    name: Teste seguro de envio (sem tocar no site)
+    name: Teste de FTP comum na pasta isolada
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -25,15 +25,15 @@ jobs:
       - name: Conferir arquivos PHP
         run: find . -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 
-      - name: Validar sintaxe do script de FTPS
+      - name: Validar sintaxe do script de FTP
         run: bash -n bin/whatsapp_ftp_test.sh
 
-      - name: Enviar arquivos para pasta temporaria isolada via FTPS
+      - name: Enviar arquivos para pasta temporaria isolada via FTP comum
         env:
           FTP_SERVER: ftp.zapapi1.hospedagemdesites.ws
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_PORT: ${{ secrets.FTP_PORT }}
-          FTP_PROTOCOL: ${{ secrets.FTP_PROTOCOL }}
+          FTP_PROTOCOL: ftp
         shell: bash
         run: bash bin/whatsapp_ftp_test.sh

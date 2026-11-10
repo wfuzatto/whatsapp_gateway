@@ -65,11 +65,11 @@ Fontes oficiais: https://www.postman.com/meta/whatsapp-business-platform/overvie
 
 ## Teste de envio para FTP sem publicar o site
 
-O GitHub Actions disponibiliza o workflow manual `WhatsApp - Testar envio ao FTP (FTPS)`.
-Pode ser executado em **Actions → WhatsApp - Testar envio ao FTP (FTPS) → Run workflow**. O primeiro push do workflow também inicia um teste automático.
+O GitHub Actions disponibiliza o workflow manual `WhatsApp - Testar envio ao FTP comum`.
+Pode ser executado em **Actions → WhatsApp - Testar envio ao FTP comum → Run workflow**. O primeiro push do workflow também inicia um teste automático.
 
-**Secrets necessários:** `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`; `FTP_PORT=21` e `FTP_PROTOCOL=ftps` são aceitos (na ausência dos opcionais, usam-se esses padrões). O destino previsto é `ftp.zapapi.inf.br`, com usuário `zapapi1`.
+**Secrets necessários:** `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`; `FTP_PORT=21` e `FTP_PROTOCOL=ftp` são aceitos (na ausência dos opcionais, usam-se esses padrões). O destino previsto é `ftp.zapapi.inf.br`, com usuário `zapapi1`.
 
-O script `bin/whatsapp_ftp_test.sh` exige **FTPS explícito com certificado TLS validado**, testa a gravação e o download de um marcador e, se bem-sucedido, envia todos os arquivos versionados para uma **pasta única de teste** `whatsapp_gateway_teste/<run>-<tentativa>-<commit>` a partir da raiz visível ao FTP. Não escreve na pasta do site, não altera o banco, não utiliza o `FTP_PATH` nem cria ou modifica arquivos `.env` remotos. Se o servidor não suportar FTPS, o teste falhará sem transmitir a senha por FTP desprotegido.
+O script `bin/whatsapp_ftp_test.sh` usa **FTP comum (sem TLS; credenciais e conteúdo trafegam sem criptografia)**, testa a gravação e o download de um marcador e, se bem-sucedido, envia todos os arquivos versionados para uma **pasta única de teste** `whatsapp_gateway_teste/<run>-<tentativa>-<commit>` a partir da raiz visível ao FTP. Não escreve na pasta do site, não altera o banco, não utiliza o `FTP_PATH` nem cria ou modifica arquivos `.env` remotos. **Aviso de segurança:** o servidor aparentemente não suporta FTPS. Use credenciais de FTP exclusivas, diferentes da senha do MySQL, e migre para SFTP/FTPS assim que disponível.
 
 A pasta física informada pelo provedor (`/home/zapapi1/`) pode ser diferente da raiz visível na sessão FTP. Publicação real no site requer confirmação posterior do diretório e do protocolo. **Credenciais de FTP compartilhadas em mensagens devem ser rotacionadas antes do uso em produção**.
