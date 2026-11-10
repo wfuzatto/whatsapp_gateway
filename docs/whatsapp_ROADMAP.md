@@ -32,3 +32,7 @@ Fontes:
 - https://www.postman.com/meta/whatsapp-business-platform/overview
 - https://developers.facebook.com/documentation/business-messaging/whatsapp
 - https://developers.facebook.com/docs/graph-api/changelog
+
+
+## Atualizacao multi-tenant
+Implementados: `whatsapp_tenants`, `whatsapp_wabas`, isolamento de numeros, chaves de API por tenant/numero, FKs `(tenant_id,account_id)`, suspensao de cliente e testes integrados de isolamento MySQL. Pendentes: painel com administradores de tenant, cotas/limites individuais, cobranca por tenant, migraçao assistida do banco anterior e testes reais com diversos WABAs.

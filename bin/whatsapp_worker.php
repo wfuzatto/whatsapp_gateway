@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 if (PHP_SAPI !== 'cli') { http_response_code(403); exit; }
-require dirname(__DIR__) . '/src/Jobs.php';
+require dirname(__DIR__) . '/src/whatsapp_Jobs.php';
 $loop = in_array('--loop', $argv, true);
 do {
     try {

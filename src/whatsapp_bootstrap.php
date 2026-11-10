@@ -86,31 +86,81 @@ function unseal(string $ciphertext): string {
     if ($data === false) throw new RuntimeException('Secret decryption failed');
     return $data;
 }
-function bearerAccount(): array {
+/**
+ * Autenticacao com escopo de tenant. Uma chave pode ser de tenant (varios numeros)
+ * ou vinculada a um numero especifico. Nunca confie em tenant_id do JSON enviado.
+ */
+function bearerContext(): array {
     $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-    if (!preg_match('/^Bearer\s+([a-zA-Z0-9_-]{20,160})$/', $auth, $m))
-        throw new HttpError('Invalid or missing API token', 401);
-    $sql = 'SELECT a.* FROM api_keys k JOIN accounts a ON a.id=k.account_id
-            WHERE k.token_hash=? AND k.active=1 LIMIT 1';
-    $s = db()->prepare($sql);
-    $s->execute([hash('sha256', $m[1])]);
-    $a = $s->fetch();
-    if (!$a) throw new HttpError('Invalid or missing API token', 401);
-    return $a;
+    if (!preg_match('/^Bearer\\s+([a-zA-Z0-9_-]{20,160})$/', $auth, $m))
+        throw new HttpError('Invalid or missing API token',401);
+    $s = db()->prepare("SELECT k.id AS key_id,k.tenant_id,k.account_id,t.slug AS tenant_slug
+        FROM whatsapp_api_keys k
+        JOIN whatsapp_tenants t ON t.id=k.tenant_id
+        WHERE k.token_hash=? AND k.active=1 AND t.status='active' LIMIT 1");
+    $s->execute([hash('sha256',$m[1])]);
+    $context = $s->fetch();
+    if (!$context) throw new HttpError('Invalid or missing API token',401);
+    return $context;
+}
+function selectedAccount(array $context, ?string $requestedPhoneId): array {
+    $tenantId = (int)$context['tenant_id'];
+    if ($requestedPhoneId !== null && $requestedPhoneId !== '' && !validId($requestedPhoneId))
+        throw new HttpError('Invalid X-WhatsApp-Phone-Id header',400);
+    if ($context['account_id'] !== null) {
+        $s = db()->prepare("SELECT * FROM whatsapp_accounts
+              WHERE tenant_id=? AND id=? AND status='active' LIMIT 1");
+        $s->execute([$tenantId,$context['account_id']]);
+        $account = $s->fetch();
+        if (!$account || ($requestedPhoneId && $requestedPhoneId !== $account['phone_number_id']))
+            throw new HttpError('WhatsApp number not found for this API key',404);
+        return $account;
+    }
+    if ($requestedPhoneId) {
+        $s = db()->prepare("SELECT * FROM whatsapp_accounts
+              WHERE tenant_id=? AND phone_number_id=? AND status='active' LIMIT 1");
+        $s->execute([$tenantId,$requestedPhoneId]);
+        $account = $s->fetch();
+        if (!$account) throw new HttpError('WhatsApp number not found for this tenant',404);
+        return $account;
+    }
+    $s = db()->prepare("SELECT * FROM whatsapp_accounts WHERE tenant_id=? AND status='active' ORDER BY id LIMIT 2");
+    $s->execute([$tenantId]);
+    $accounts = $s->fetchAll();
+    if (count($accounts)===0) throw new HttpError('Tenant has no active WhatsApp number',404);
+    if (count($accounts)>1)
+        throw new HttpError('Multiple numbers: supply X-WhatsApp-Phone-Id header',400);
+    return $accounts[0];
+}
+function bearerAccount(): array {
+    return selectedAccount(bearerContext(),$_SERVER['HTTP_X_WHATSAPP_PHONE_ID']??null);
+}
+function tenantBySlug(string $slug): ?array {
+    $s=db()->prepare('SELECT * FROM whatsapp_tenants WHERE slug=?');
+    $s->execute([$slug]);
+    return $s->fetch() ?: null;
 }
 function accountByPhone(string $phoneId): ?array {
-    $s = db()->prepare('SELECT * FROM accounts WHERE phone_number_id=?');
+    $s=db()->prepare("SELECT a.* FROM whatsapp_accounts a
+                      JOIN whatsapp_tenants t ON t.id=a.tenant_id
+                      WHERE a.phone_number_id=? AND a.status='active' AND t.status='active'");
     $s->execute([$phoneId]);
     return $s->fetch() ?: null;
 }
 function accountByWaba(string $wabaId): ?array {
-    $s = db()->prepare('SELECT * FROM accounts WHERE waba_id=? LIMIT 1');
+    $s=db()->prepare("SELECT a.* FROM whatsapp_accounts a
+                      JOIN whatsapp_wabas w ON w.waba_id=a.waba_id AND w.tenant_id=a.tenant_id
+                      JOIN whatsapp_tenants t ON t.id=a.tenant_id
+                      WHERE w.waba_id=? AND a.status='active' AND t.status='active'
+                      ORDER BY a.id LIMIT 1");
     $s->execute([$wabaId]);
     return $s->fetch() ?: null;
 }
-function audit(?int $accountId, string $action, array $details = []): void {
-    $s = db()->prepare('INSERT INTO audit_logs(account_id,action,details) VALUES (?,?,?)');
-    $s->execute([$accountId, $action, jsonString($details)]);
+function audit(?int $accountId,string $action,array $details=[]): void {
+    if ($accountId===null) throw new RuntimeException('Audit requires a tenant-bound account');
+    $s=db()->prepare('INSERT INTO whatsapp_audit_logs(tenant_id,account_id,action,details)
+                      SELECT tenant_id,id,?,? FROM whatsapp_accounts WHERE id=?');
+    $s->execute([$action,jsonString($details),$accountId]);
 }
 function validId(string $s): bool { return (bool)preg_match('/^[0-9]{1,40}$/D', $s); }
 function validPhone(string $s): bool { return (bool)preg_match('/^[0-9]{7,20}$/D', $s); }

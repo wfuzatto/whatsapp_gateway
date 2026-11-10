@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
-require dirname(__DIR__) . '/src/bootstrap.php';
-require dirname(__DIR__) . '/src/Rules.php';
+require dirname(__DIR__) . '/src/whatsapp_bootstrap.php';
+require dirname(__DIR__) . '/src/whatsapp_Rules.php';
 
 function check(bool $condition, string $label): void {
     if (!$condition) { fwrite(STDERR, "FAIL: $label\n"); exit(1); }
@@ -21,7 +21,7 @@ putenv('MASTER_KEY_BASE64=' . $key);
 $secret = 'sample-secret-' . bin2hex(random_bytes(8));
 check(unseal(seal($secret)) === $secret, 'sodium encrypted secrets roundtrip');
 check(hash_equals(hash_hmac('sha256', 'payload', 'abc'), hash_hmac('sha256','payload','abc')), 'HMAC primitive');
-require dirname(__DIR__) . '/src/Webhook.php';
+require dirname(__DIR__) . '/src/whatsapp_Webhook.php';
 putenv('META_APP_SECRET=unit-webhook-secret');
 putenv('META_VERIFY_TOKEN=unit-verify-token');
 $raw = '{"object":"whatsapp_business_account","entry":[]}';

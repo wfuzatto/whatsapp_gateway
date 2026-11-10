@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/whatsapp_bootstrap.php';
 
 final class Webhook {
     public static function verifySubscription(array $query): string {
@@ -37,19 +37,22 @@ final class Webhook {
                     if (!is_array($value)) $value = [];
                     $phoneId = (string)($value['metadata']['phone_number_id'] ?? '');
                     $account = $phoneId !== '' ? accountByPhone($phoneId) : accountByWaba($entryId);
-                    $accountId = $account ? (int)$account['id'] : null;
+                    // Evento sem vinculacao verificavel a tenant nunca entra no banco.
+                    if (!$account || ($entryId!=='' && $account['waba_id']!==$entryId)) continue;
+                    $tenantId = (int)$account['tenant_id'];
+                    $accountId = (int)$account['id'];
                     $eventKey = hash('sha256', $entryId . "\n" . jsonString($change));
                     $field = substr((string)($change['field'] ?? 'unknown'), 0, 80);
-                    $stmt = $pdo->prepare('INSERT IGNORE INTO webhook_events(account_id,event_key,event_type,payload) VALUES (?,?,?,?)');
-                    $stmt->execute([$accountId, $eventKey, $field, jsonString(['entry_id'=>$entryId,'change'=>$change])]);
+                    $stmt = $pdo->prepare('INSERT IGNORE INTO whatsapp_webhook_events(tenant_id,account_id,event_key,event_type,payload) VALUES (?,?,?,?,?)');
+                    $stmt->execute([$tenantId, $accountId, $eventKey, $field, jsonString(['entry_id'=>$entryId,'change'=>$change])]);
                     if ($stmt->rowCount() === 0) continue; // Meta pode enviar novamente o mesmo evento
                     $saved++;
                     if ($accountId !== null) {
-                        self::updateIncoming($pdo, $accountId, $value);
+                        self::updateIncoming($pdo, $tenantId, $accountId, $value);
                         if (!empty($account['callback_url']) && !empty($account['callback_secret_box'])) {
-                            $stmt = $pdo->prepare('INSERT IGNORE INTO jobs(account_id,kind,idempotency_key,payload)
-                                                   VALUES (?,"callback",?,?)');
-                            $stmt->execute([$accountId,'event-' . $eventKey,jsonString([
+                            $stmt = $pdo->prepare('INSERT IGNORE INTO whatsapp_jobs(tenant_id,account_id,kind,idempotency_key,payload)
+                                                   VALUES (?,?,"callback",?,?)');
+                            $stmt->execute([$tenantId,$accountId,'event-' . $eventKey,jsonString([
                                 'event_id'=>$eventKey,'event_type'=>$field,'entry_id'=>$entryId,
                                 'change'=>$change
                             ])]);
@@ -64,7 +67,7 @@ final class Webhook {
         }
         return ['accepted'=>true,'events_saved'=>$saved];
     }
-    private static function updateIncoming(PDO $pdo, int $accountId, array $value): void {
+    private static function updateIncoming(PDO $pdo, int $tenantId, int $accountId, array $value): void {
         $names = [];
         foreach (($value['contacts'] ?? []) as $contact) {
             $waId = (string)($contact['wa_id'] ?? '');
@@ -79,20 +82,20 @@ final class Webhook {
             $ts = $ts > 0 && $ts <= time() ? $ts : time();
             $receivedAt = gmdate('Y-m-d H:i:s', $ts);
             $name = $names[$from] ?? null;
-            $s = $pdo->prepare('INSERT INTO contacts(account_id,wa_id,display_name,last_inbound_at)
-                VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE
+            $s = $pdo->prepare('INSERT INTO whatsapp_contacts(tenant_id,account_id,wa_id,display_name,last_inbound_at)
+                VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE
                 display_name=COALESCE(VALUES(display_name),display_name),
                 last_inbound_at=GREATEST(COALESCE(last_inbound_at,"1970-01-01 00:00:00"),VALUES(last_inbound_at))');
-            $s->execute([$accountId,$from,$name ?: null,$receivedAt]);
-            $s = $pdo->prepare('INSERT IGNORE INTO messages(account_id,wa_id,direction,whatsapp_id,message_type,status,payload)
-                VALUES (?,?,"inbound",?,?,"received",?)');
-            $s->execute([$accountId,$from,$waMessageId,substr((string)($message['type'] ?? 'unknown'),0,40),jsonString($message)]);
+            $s->execute([$tenantId,$accountId,$from,$name ?: null,$receivedAt]);
+            $s = $pdo->prepare('INSERT IGNORE INTO whatsapp_messages(tenant_id,account_id,wa_id,direction,whatsapp_id,message_type,status,payload)
+                VALUES (?,?,?,"inbound",?,?,"received",?)');
+            $s->execute([$tenantId,$accountId,$from,$waMessageId,substr((string)($message['type'] ?? 'unknown'),0,40),jsonString($message)]);
         }
         foreach (($value['statuses'] ?? []) as $st) {
             if (!is_array($st) || empty($st['id']) || empty($st['status'])) continue;
             $status = substr((string)$st['status'], 0, 30);
-            $s = $pdo->prepare('UPDATE messages SET status=? WHERE account_id=? AND whatsapp_id=?');
-            $s->execute([$status,$accountId,(string)$st['id']]);
+            $s = $pdo->prepare('UPDATE whatsapp_messages SET status=? WHERE tenant_id=? AND account_id=? AND whatsapp_id=?');
+            $s->execute([$status,$tenantId,$accountId,(string)$st['id']]);
         }
     }
 }

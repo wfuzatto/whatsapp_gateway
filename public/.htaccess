@@ -1,5 +1,5 @@
 Options -Indexes
-DirectoryIndex index.php
+DirectoryIndex whatsapp_index.php
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^ index.php [L,QSA]
+RewriteRule ^ whatsapp_index.php [L,QSA]

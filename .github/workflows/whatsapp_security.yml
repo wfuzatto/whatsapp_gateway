@@ -1,0 +1,61 @@
+name: WhatsApp Gateway PHP tests and tenant isolation
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  syntax-and-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.2', '8.3']
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: only-for-ci
+          MYSQL_DATABASE: whatsapp_gateway_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -ponly-for-ci --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      APP_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_NAME: whatsapp_gateway_test
+      DB_USER: root
+      DB_PASSWORD: only-for-ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, pdo_mysql, sodium, fileinfo
+          tools: none
+      - name: PHP lint
+        run: find . -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Enforce whatsapp_ filename prefix
+        run: |
+          while IFS= read -r file; do
+            base="${file##*/}"
+            case "$base" in
+              .gitignore|.htaccess) ;;
+              whatsapp_*) ;;
+              *) echo "File without whatsapp_ prefix: $file"; exit 1 ;;
+            esac
+          done < <(git ls-files)
+      - name: Block compiled binaries and secrets
+        run: |
+          if git ls-files | grep -Ei '(^|/)(\.env$|.*\.(exe|dll|msi|bat|ps1|phar|zip|pem|key)$)'; then
+            echo 'Blocked artifact or secret'; exit 1
+          fi
+      - name: PHP smoke tests
+        run: php tests/whatsapp_smoke.php
+      - name: MySQL multi-tenant integration tests
+        run: php tests/whatsapp_integration.php

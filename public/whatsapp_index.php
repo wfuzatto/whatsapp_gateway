@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
-require dirname(__DIR__) . '/src/bootstrap.php';
-require dirname(__DIR__) . '/src/Graph.php';
-require dirname(__DIR__) . '/src/Rules.php';
-require dirname(__DIR__) . '/src/Webhook.php';
-require dirname(__DIR__) . '/src/Jobs.php';
+require dirname(__DIR__) . '/src/whatsapp_bootstrap.php';
+require dirname(__DIR__) . '/src/whatsapp_Graph.php';
+require dirname(__DIR__) . '/src/whatsapp_Rules.php';
+require dirname(__DIR__) . '/src/whatsapp_Webhook.php';
+require dirname(__DIR__) . '/src/whatsapp_Jobs.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -65,18 +65,38 @@ try {
     }
 
     if (!str_starts_with($path,'/v1/')) throw new HttpError('Path not found',404);
-    $account = bearerAccount();
+    $context = bearerContext();
+    $tenantId = (int)$context['tenant_id'];
+    if ($path === '/v1/tenant' && $method === 'GET') {
+        $st = db()->prepare("SELECT id,slug,name,status,created_at FROM whatsapp_tenants WHERE id=?");
+        $st->execute([$tenantId]);
+        response(200,$st->fetch());
+    }
+    if ($path === '/v1/accounts' && $method === 'GET') {
+        $sql = "SELECT id,name,waba_id,phone_number_id,status,created_at
+                FROM whatsapp_accounts WHERE tenant_id=?";
+        $args = [$tenantId];
+        if ($context['account_id'] !== null) {
+            $sql .= " AND id=?";
+            $args[] = $context['account_id'];
+        }
+        $sql .= " ORDER BY id";
+        $st = db()->prepare($sql);
+        $st->execute($args);
+        response(200,['data'=>$st->fetchAll()]);
+    }
+    $account = selectedAccount($context, $_SERVER['HTTP_X_WHATSAPP_PHONE_ID'] ?? null);
     $accountId = (int)$account['id'];
     $waba = $account['waba_id'];
     $phone = $account['phone_number_id'];
 
     if ($path === '/v1/me' && $method === 'GET')
-        response(200,['account_id'=>$accountId,'name'=>$account['name'],'waba_id'=>$waba,
+        response(200,['tenant_id'=>$tenantId,'tenant_slug'=>$context['tenant_slug'],'account_id'=>$accountId,'name'=>$account['name'],'waba_id'=>$waba,
                       'phone_number_id'=>$phone,'graph_version'=>config('GRAPH_VERSION','v26.0')]);
 
     if ($path === '/v1/messages' && $method === 'POST') {
         $data = Rules::normaliseMessage(requestJson());
-        Rules::ensureConsentAndWindow($accountId,$data);
+        Rules::ensureConsentAndWindow($account,$data);
         if (($_GET['sync'] ?? '') === '1') {
             if (isset($_SERVER['HTTP_IDEMPOTENCY_KEY'])) throw new HttpError('Use async mode for Idempotency-Key',422);
             $result = Graph::call($account,'POST',$phone.'/messages',$data);
@@ -100,11 +120,11 @@ try {
     if ($path === '/v1/messages' && $method === 'GET') {
         $before = (int)($_GET['before_id'] ?? PHP_INT_MAX);
         response(200,['data'=>getList('SELECT id,wa_id,direction,whatsapp_id,message_type,status,payload,meta_response,created_at
-          FROM messages WHERE account_id=? AND id<? ORDER BY id DESC',[$accountId,$before])]);
+          FROM whatsapp_messages WHERE tenant_id=? AND account_id=? AND id<? ORDER BY id DESC',[$tenantId,$accountId,$before])]);
     }
     if ($path === '/v1/contacts' && $method === 'GET')
         response(200,['data'=>getList('SELECT id,wa_id,display_name,opt_in_at,opt_in_source,last_inbound_at
-          FROM contacts WHERE account_id=? ORDER BY id DESC',[$accountId])]);
+          FROM whatsapp_contacts WHERE tenant_id=? AND account_id=? ORDER BY id DESC',[$tenantId,$accountId])]);
     if ($path === '/v1/contacts/consent' && $method === 'POST') {
         $data = requestJson();
         $waId = (string)($data['wa_id'] ?? '');
@@ -114,31 +134,31 @@ try {
         $source = trim((string)($data['source'] ?? ''));
         if ($consent && (strlen($source)<4 || strlen($source)>255))
             throw new HttpError('Documented consent source required (4-255 chars)');
-        $s = db()->prepare('INSERT INTO contacts(account_id,wa_id,opt_in_at,opt_in_source)
-            VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE opt_in_at=VALUES(opt_in_at),
+        $s = db()->prepare('INSERT INTO whatsapp_contacts(tenant_id,account_id,wa_id,opt_in_at,opt_in_source)
+            VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE opt_in_at=VALUES(opt_in_at),
              opt_in_source=VALUES(opt_in_source)');
-        $s->execute([$accountId,$waId,$consent?gmdate('Y-m-d H:i:s'):null,$consent?$source:null]);
+        $s->execute([$tenantId,$accountId,$waId,$consent?gmdate('Y-m-d H:i:s'):null,$consent?$source:null]);
         audit($accountId,$consent?'contact.optin':'contact.optout',['wa_id'=>$waId,'source'=>$consent?$source:null]);
         response(200,['ok'=>true,'wa_id'=>$waId,'consent'=>$consent]);
     }
     if ($path === '/v1/events' && $method === 'GET') {
         $before = (int)($_GET['before_id'] ?? PHP_INT_MAX);
         response(200,['data'=>getList('SELECT id,event_key,event_type,payload,received_at
-          FROM webhook_events WHERE account_id=? AND id<? ORDER BY id DESC',[$accountId,$before])]);
+          FROM whatsapp_webhook_events WHERE tenant_id=? AND account_id=? AND id<? ORDER BY id DESC',[$tenantId,$accountId,$before])]);
     }
     if (preg_match('~^/v1/jobs/([0-9]+)$~D',$path,$m)) {
         if ($method === 'GET') {
             $s = db()->prepare('SELECT id,kind,idempotency_key,status,attempts,max_attempts,
-                         next_attempt_at,last_error,response,created_at,updated_at FROM jobs WHERE id=? AND account_id=?');
-            $s->execute([$m[1],$accountId]);
+                         next_attempt_at,last_error,response,created_at,updated_at FROM whatsapp_jobs WHERE id=? AND tenant_id=? AND account_id=?');
+            $s->execute([$m[1],$tenantId,$accountId]);
             $job = $s->fetch();
             if (!$job) throw new HttpError('Job not found',404);
             response(200,$job);
         }
         if ($method === 'POST' && ($_GET['action'] ?? '') === 'retry') {
-            $s = db()->prepare("UPDATE jobs SET status='queued',attempts=0,next_attempt_at=UTC_TIMESTAMP(),locked_at=NULL
-                  WHERE id=? AND account_id=? AND status IN ('failed','uncertain')");
-            $s->execute([$m[1],$accountId]);
+            $s = db()->prepare("UPDATE whatsapp_jobs SET status='queued',attempts=0,next_attempt_at=UTC_TIMESTAMP(),locked_at=NULL
+                  WHERE id=? AND tenant_id=? AND account_id=? AND status IN ('failed','uncertain')");
+            $s->execute([$m[1],$tenantId,$accountId]);
             if (!$s->rowCount()) throw new HttpError('Job not found or not retryable',409);
             audit($accountId,'job.manual_retry',['job_id'=>(int)$m[1],'duplicate_risk'=>true]);
             response(202,['queued'=>true,'duplicate_risk'=>true]);

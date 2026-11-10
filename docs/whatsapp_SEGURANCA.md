@@ -14,3 +14,9 @@
 - **Idempotência:** para mensagens, uma falha na rede após a Meta receber o pedido pode criar estado `uncertain`. Nenhum reenvio automático; verifique a entrega antes do retry manual para evitar duplicatas.
 - Um callback só pode ser configurado pelo CLI administrativo. Use domínios HTTPS sob seu controle; não configure hosts internos nem endpoints de terceiros.
 - Faça SAST, análise de dependências do PHP hospedado e testes E2E com a Meta antes de produção.
+
+
+## Isolamento de clientes
+Tabelas com prefixo `whatsapp_` e coluna `tenant_id` em todas as entidades operacionais. As chaves de API foram vinculadas ao tenant e, opcionalmente, a um numero. Consultas dos endpoints filtram tenant e conta. O CLI administrativo tem acesso global e exige protecao de servidor.
+
+**Aviso de upgrade**: a estrutura antiga nao esta pronta para migrar dados automaticamente para o esquema novo. Nunca execute o esquema novo sobre a base anterior sem backup e plano de atribuicao de contas a tenants. Um banco novo e vazio e o caminho seguro para validacao.

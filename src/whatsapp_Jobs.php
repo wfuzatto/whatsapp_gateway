@@ -1,18 +1,18 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/bootstrap.php';
-require_once __DIR__ . '/Graph.php';
-require_once __DIR__ . '/Rules.php';
+require_once __DIR__ . '/whatsapp_bootstrap.php';
+require_once __DIR__ . '/whatsapp_Graph.php';
+require_once __DIR__ . '/whatsapp_Rules.php';
 
 final class Jobs {
     public static function enqueueSend(array $account, array $payload, string $key): array {
         if (!preg_match('/^[A-Za-z0-9._:-]{8,180}$/D', $key)) throw new HttpError('Invalid Idempotency-Key');
-        $s = db()->prepare('INSERT IGNORE INTO jobs(account_id,kind,idempotency_key,payload)
-                             VALUES (?,"send",?,?)');
-        $s->execute([$account['id'],$key,jsonString($payload)]);
+        $s = db()->prepare('INSERT IGNORE INTO whatsapp_jobs(tenant_id,account_id,kind,idempotency_key,payload)
+                             VALUES (?,?,"send",?,?)');
+        $s->execute([$account['tenant_id'],$account['id'],$key,jsonString($payload)]);
         $added = $s->rowCount() === 1;
-        $s = db()->prepare('SELECT id,status,payload,created_at FROM jobs WHERE account_id=? AND kind="send" AND idempotency_key=?');
-        $s->execute([$account['id'],$key]);
+        $s = db()->prepare('SELECT id,status,payload,created_at FROM whatsapp_jobs WHERE tenant_id=? AND account_id=? AND kind="send" AND idempotency_key=?');
+        $s->execute([$account['tenant_id'],$account['id'],$key]);
         $job = $s->fetch();
         if (!$job) throw new RuntimeException('Unable to load queued job');
         if (!$added && json_decode($job['payload'],true) != $payload)
@@ -22,18 +22,22 @@ final class Jobs {
     public static function claim(): ?array {
         $pdo = db();
         // Nao reenviar jobs "processing" cujo worker caiu: entrega pode ja ter acontecido.
-        $pdo->exec("UPDATE jobs SET status='uncertain',last_error='Worker stopped after claiming send'
+        $pdo->exec("UPDATE whatsapp_jobs SET status='uncertain',last_error='Worker stopped after claiming send'
                     WHERE kind='send' AND status='processing' AND locked_at < UTC_TIMESTAMP() - INTERVAL 10 MINUTE");
-        $pdo->exec("UPDATE jobs SET status='retry',locked_at=NULL
+        $pdo->exec("UPDATE whatsapp_jobs SET status='retry',locked_at=NULL
                     WHERE kind='callback' AND status='processing' AND locked_at < UTC_TIMESTAMP() - INTERVAL 10 MINUTE");
         $pdo->beginTransaction();
         try {
-            $s = $pdo->query("SELECT * FROM jobs WHERE status IN ('queued','retry')
-                              AND next_attempt_at<=UTC_TIMESTAMP() ORDER BY id
+            $s = $pdo->query("SELECT j.* FROM whatsapp_jobs j
+                              JOIN whatsapp_tenants t ON t.id=j.tenant_id AND t.status='active'
+                              JOIN whatsapp_accounts a ON a.id=j.account_id
+                                AND a.tenant_id=j.tenant_id AND a.status='active'
+                              WHERE j.status IN ('queued','retry')
+                              AND j.next_attempt_at<=UTC_TIMESTAMP() ORDER BY j.id
                               LIMIT 1 FOR UPDATE SKIP LOCKED");
             $job = $s->fetch();
             if (!$job) { $pdo->commit(); return null; }
-            $pdo->prepare("UPDATE jobs SET status='processing',attempts=attempts+1,locked_at=UTC_TIMESTAMP()
+            $pdo->prepare("UPDATE whatsapp_jobs SET status='processing',attempts=attempts+1,locked_at=UTC_TIMESTAMP()
                             WHERE id=?")->execute([$job['id']]);
             $pdo->commit();
             $job['attempts'] = (int)$job['attempts']+1;
@@ -44,8 +48,9 @@ final class Jobs {
         }
     }
     public static function process(array $job): void {
-        $s = db()->prepare('SELECT * FROM accounts WHERE id=?');
-        $s->execute([$job['account_id']]);
+        $s = db()->prepare('SELECT a.* FROM whatsapp_accounts a JOIN whatsapp_tenants t ON t.id=a.tenant_id
+                             WHERE a.id=? AND a.tenant_id=? AND a.status='active' AND t.status='active'');
+        $s->execute([$job['account_id'],$job['tenant_id']]);
         $account = $s->fetch();
         if (!$account) { self::finish($job,'failed',[], 'Account no longer exists'); return; }
         $payload = json_decode($job['payload'],true);
@@ -53,7 +58,7 @@ final class Jobs {
         try {
             if ($job['kind'] === 'send') {
                 // Consentimento/janela conferidos novamente na hora real do envio.
-                Rules::ensureConsentAndWindow((int)$account['id'], $payload);
+                Rules::ensureConsentAndWindow($account, $payload);
                 $result = Graph::call($account,'POST',$account['phone_number_id'] . '/messages',$payload);
                 Rules::storeOutgoing($account,$payload,$result);
             } else {
@@ -98,7 +103,7 @@ final class Jobs {
         return ['http_status'=>$status,'job_id'=>$id];
     }
     private static function finish(array $job,string $state,array $result=[],?string $error=null): void {
-        $s = db()->prepare('UPDATE jobs SET status=?,response=?,last_error=?,locked_at=NULL WHERE id=?');
+        $s = db()->prepare('UPDATE whatsapp_jobs SET status=?,response=?,last_error=?,locked_at=NULL WHERE id=?');
         $s->execute([$state,jsonString($result),$error,$job['id']]);
     }
     private static function retry(array $job,string $error): void {
@@ -107,7 +112,7 @@ final class Jobs {
             return;
         }
         $delay = min(3600, (int)pow(2, min((int)$job['attempts'],10))*10 + random_int(0,10));
-        $s = db()->prepare("UPDATE jobs SET status='retry',last_error=?,locked_at=NULL,
+        $s = db()->prepare("UPDATE whatsapp_jobs SET status='retry',last_error=?,locked_at=NULL,
                             next_attempt_at=DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? SECOND) WHERE id=?");
         $s->execute([$error,$delay,$job['id']]);
     }

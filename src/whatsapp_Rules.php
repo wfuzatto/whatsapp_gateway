@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/whatsapp_bootstrap.php';
 
 final class Rules {
     public static function normaliseMessage(array $data): array {
@@ -13,9 +13,9 @@ final class Rules {
         $data['recipient_type'] = 'individual';
         return $data;
     }
-    public static function ensureConsentAndWindow(int $accountId, array $data): void {
-        $stmt = db()->prepare('SELECT opt_in_at,last_inbound_at FROM contacts WHERE account_id=? AND wa_id=?');
-        $stmt->execute([$accountId, $data['to']]);
+    public static function ensureConsentAndWindow(array $account, array $data): void {
+        $stmt = db()->prepare('SELECT opt_in_at,last_inbound_at FROM whatsapp_contacts WHERE tenant_id=? AND account_id=? AND wa_id=?');
+        $stmt->execute([$account['tenant_id'], $account['id'], $data['to']]);
         $contact = $stmt->fetch() ?: [];
         if ($data['type'] === 'template') {
             if (empty($contact['opt_in_at'])) throw new HttpError('No recorded opt-in for this recipient', 422);
@@ -28,8 +28,8 @@ final class Rules {
     public static function storeOutgoing(array $account, array $data, array $result): void {
         $waId = $result['messages'][0]['id'] ?? null;
         if ($waId !== null && !is_string($waId)) $waId = null;
-        $s = db()->prepare('INSERT IGNORE INTO messages(account_id,wa_id,direction,whatsapp_id,message_type,status,payload,meta_response)
-                            VALUES (?,?,"outbound",?,?,"accepted",?,?)');
-        $s->execute([$account['id'],$data['to'],$waId,$data['type'],jsonString($data),jsonString($result)]);
+        $s = db()->prepare('INSERT IGNORE INTO whatsapp_messages(tenant_id,account_id,wa_id,direction,whatsapp_id,message_type,status,payload,meta_response)
+                            VALUES (?,?,?,"outbound",?,?,"accepted",?,?)');
+        $s->execute([$account['tenant_id'],$account['id'],$data['to'],$waId,$data['type'],jsonString($data),jsonString($result)]);
     }
 }

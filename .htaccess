@@ -3,6 +3,6 @@ RewriteEngine On
 RewriteCond %{HTTP:Authorization} .
 RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 RewriteRule ^(\.git|\.env|src|database|bin|docs|tests|\.github|storage)(/|$) - [F,L,NC]
-RewriteRule ^(README|LICENSE|composer\.|phpunit\.|\.gitignore) - [F,L,NC]
+RewriteRule ^(whatsapp_README|whatsapp_env\.example|LICENSE|composer\.|phpunit\.|\.gitignore) - [F,L,NC]
 RewriteRule ^public/ - [L]
 RewriteRule ^(.*)$ public/$1 [L,QSA]
