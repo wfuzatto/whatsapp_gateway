@@ -67,5 +67,7 @@ jobs:
         run: php tests/whatsapp_meta_smoke.php
       - name: Authenticated Meta integration UI and tenant isolation
         run: bash tests/whatsapp_meta_http.sh
+      - name: Mobile API login, tenant isolation and 24h window tests
+        run: bash tests/whatsapp_mobile_http.sh
       - name: Protected installer and superadmin HTTP tests
         run: bash tests/whatsapp_install_http.sh
