@@ -44,7 +44,20 @@ def main():
         ftp.set_pasv(True)
         previous={}
         for name,marker in FILES.items():
-            previous[name]=download(ftp,DEST+"/"+name)
+            print("Conferindo arquivo existente:",DEST+"/"+name,flush=True)
+            try:
+                previous[name]=download(ftp,DEST+"/"+name)
+            except ftplib.error_perm as err:
+                for directory in (DEST,DEST+"/src",DEST+"/public"):
+                    try:
+                        listed=[path.rsplit("/",1)[-1] for path in ftp.nlst(directory)]
+                        print("Diagnostico",directory,":",
+                              ", ".join(sorted(n for n in listed if
+                              n.startswith("whatsapp_") or n in ("src","public","index.php","index.html"))),
+                              flush=True)
+                    except ftplib.all_errors:
+                        print("Diretorio indisponivel:",directory,flush=True)
+                raise RuntimeError("Arquivo remoto nao encontrado: "+name) from err
             if marker not in previous[name]:
                 raise RuntimeError("Gateway nao confirmado no arquivo remoto: "+name)
         backup="/whatsapp_gateway_backups"
