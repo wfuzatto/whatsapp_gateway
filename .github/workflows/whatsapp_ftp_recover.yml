@@ -1,0 +1,30 @@
+name: WhatsApp - Recuperar projeto correto no FTP
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/whatsapp_ftp_recover.yml
+      - bin/whatsapp_ftp_recover.py
+permissions:
+  contents: read
+concurrency:
+  group: whatsapp-ftp-public-html
+  cancel-in-progress: false
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar sintaxe de todo o PHP
+        run: find . -type f -name "*.php" -print0 | xargs -0 -n1 php -l
+      - name: Verificar sintaxe do script de recuperacao
+        run: python3 -c "import ast; ast.parse(open('bin/whatsapp_ftp_recover.py',encoding='utf-8').read())"
+      - name: Quarentena e publicacao do gateway oficial
+        env:
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PATH: /public_html/
+          FTP_PROTOCOL: ftp
+        run: python3 bin/whatsapp_ftp_recover.py
