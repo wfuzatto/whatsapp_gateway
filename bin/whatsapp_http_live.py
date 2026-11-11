@@ -28,13 +28,22 @@ def main():
         raise RuntimeError("/health retornou outra aplicacao ou status inesperado")
     status,headers,body=probe("/")
     print("GET /",status,"content-type",headers.get("Content-Type","?"),flush=True)
-    if status!=200 or "Gateway WhatsApp" not in body:
+    if status!=200 or 'alt="ZapApi"' not in body or '/whatsapp_assets/whatsapp_zapapi_logo.svg' not in body:
         raise RuntimeError("A pagina inicial nao parece ser o WhatsApp Gateway")
     status,headers,body=probe("/entrar")
     print("GET /entrar",status,flush=True)
     if status!=200 or 'action="/entrar"' not in body:
         raise RuntimeError("Login dos tenants indisponivel")
-    print("VALIDACAO HTTPS APROVADA: API, landing e login do gateway",flush=True)
+    for asset,mark in [
+        ("/whatsapp_assets/whatsapp_zapapi_logo.svg", "<svg"),
+        ("/whatsapp_assets/whatsapp_zapapi_favicon.svg", "<svg")
+    ]:
+        status,headers,body=probe(asset)
+        ctype=headers.get("Content-Type","")
+        print("GET",asset,status,"content-type",ctype,flush=True)
+        if status!=200 or mark not in body or "svg" not in ctype.lower():
+            raise RuntimeError("Arquivo de marca nao disponivel em producao: "+asset)
+    print("VALIDACAO HTTPS APROVADA: API, landing, login e identidade ZapApi",flush=True)
 
 if __name__=="__main__":
     try:main()
