@@ -209,10 +209,19 @@ final class WhatsAppMobile {
         foreach(($all['data']??[]) as $item){
             if(($item['status']??'')==='APPROVED'){
                 $components=$item['components']??[];
-                $body='';
-                foreach($components as $c)if(($c['type']??'')==='BODY')$body=(string)($c['text']??'');
+                $body='';$header='';$headerFormat='';
+                foreach($components as $c){
+                    if(($c['type']??'')==='BODY')$body=(string)($c['text']??'');
+                    if(($c['type']??'')==='HEADER'){
+                        $header=(string)($c['text']??'');
+                        $headerFormat=(string)($c['format']??'');
+                    }
+                }
+                // O app suporta header TEXT e BODY. Midias e OTP exigem interface especifica.
+                if($headerFormat!=='' && $headerFormat!=='TEXT')continue;
                 $out[]=['name'=>$item['name']??'','language'=>$item['language']??'',
-                    'category'=>$item['category']??'','body'=>$body,
+                    'category'=>$item['category']??'','header'=>$header,'body'=>$body,
+                    'header_variables'=>self::countVariables($header),
                     'variables'=>self::countVariables($body),'account_id'=>(int)$account['id']];
             }
         }
@@ -232,10 +241,13 @@ final class WhatsAppMobile {
             !preg_match('/^[a-z]{2,3}_[A-Z]{2}$/D',$language))
             throw new HttpError('Nome ou idioma do template inválido.',422);
         $values=$data['parameters']??[];
-        if(!is_array($values)||!array_is_list($values)||count($values)>20)
-            throw new HttpError('Parâmetros inválidos.',422);
-        foreach($values as $v)if(!is_string($v)||trim($v)===''||strlen($v)>512)
-            throw new HttpError('Exemplo de variável inválido.',422);
+        $headerValues=$data['header_parameters']??[];
+        foreach(['corpo'=>$values,'cabeçalho'=>$headerValues] as $kind=>$params){
+            if(!is_array($params)||!array_is_list($params)||count($params)>20)
+                throw new HttpError('Parâmetros inválidos no '.$kind.'.',422);
+            foreach($params as $v)if(!is_string($v)||trim($v)===''||strlen($v)>512)
+                throw new HttpError('Valor de variável inválido no '.$kind.'.',422);
+        }
         $s=db()->prepare("SELECT opt_in_at FROM whatsapp_contacts
             WHERE tenant_id=? AND account_id=? AND wa_id=?");
         $s->execute([$ctx['tenant_id'],$account['id'],$phone]);$contact=$s->fetch();
@@ -248,13 +260,26 @@ final class WhatsAppMobile {
             if(($tpl['name']??'')===$name && ($tpl['language']??'')===$language &&
                 ($tpl['status']??'')==='APPROVED'){$selected=$tpl;break;}
         if(!$selected)throw new HttpError('Template ainda não aprovado para este idioma.',409);
-        $bodyText='';
-        foreach(($selected['components']??[]) as $c)if(($c['type']??'')==='BODY')$bodyText=(string)($c['text']??'');
-        if(count($values)!==self::countVariables($bodyText))
-            throw new HttpError('Quantidade de variáveis diferente do template aprovado.',422);
+        $bodyText='';$headerText='';$format='';
+        foreach(($selected['components']??[]) as $c){
+            if(($c['type']??'')==='BODY')$bodyText=(string)($c['text']??'');
+            if(($c['type']??'')==='HEADER'){
+                $headerText=(string)($c['text']??'');
+                $format=(string)($c['format']??'');
+            }
+        }
+        if($format!=='' && $format!=='TEXT')
+            throw new HttpError('Esse modelo exige mídia no cabeçalho; use a integração web.',422);
+        if(count($values)!==self::countVariables($bodyText) ||
+            count($headerValues)!==self::countVariables($headerText))
+            throw new HttpError('Confira as variáveis do cabeçalho e do corpo do template aprovado.',422);
         $template=['name'=>$name,'language'=>['code'=>$language]];
-        if($values)$template['components']=[['type'=>'body','parameters'=>
-            array_map(static fn($v)=>['type'=>'text','text'=>$v],$values)]];
+        $pieces=[];
+        if($headerValues)$pieces[]=['type'=>'header','parameters'=>
+            array_map(static fn($v)=>['type'=>'text','text'=>$v],$headerValues)];
+        if($values)$pieces[]=['type'=>'body','parameters'=>
+            array_map(static fn($v)=>['type'=>'text','text'=>$v],$values)];
+        if($pieces)$template['components']=$pieces;
         $payload=Rules::normaliseMessage(['to'=>$phone,'type'=>'template','template'=>$template]);
         Rules::ensureConsentAndWindow($account,$payload);
         $result=Graph::call($account,'POST',$account['phone_number_id'].'/messages',$payload);
