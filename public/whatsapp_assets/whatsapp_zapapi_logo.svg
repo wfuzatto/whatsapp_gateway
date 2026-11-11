@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="540" height="150" viewBox="0 0 540 150" role="img" aria-labelledby="title desc">
+<title id="title">ZapApi</title>
+<desc id="desc">Logo ZapApi: mensagem, código, automação e conexões digitais</desc>
+<defs><linearGradient id="zap" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#05B99D"/><stop offset=".55" stop-color="#0BAF64"/><stop offset="1" stop-color="#6ADD13"/></linearGradient><linearGradient id="pulse" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0CAA73"/><stop offset="1" stop-color="#13B363"/></linearGradient></defs>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round">
+<path d="M24 47l-8-10 13-14 12 7 9-6 3-16h20l5 16 13 5 14-8 12 14-9 12" fill="#07A75F" stroke="#07A75F" stroke-width="6"/>
+<path d="M54 43h50c22 0 33 11 33 32v25c0 21-12 33-33 33H49l-19 13 4-27C23 111 19 99 19 86V75c0-21 14-32 35-32Z" fill="#07372E" stroke="url(#zap)" stroke-width="15"/>
+<path d="M58 72L44 85l14 13M94 72l14 13-14 13M85 65l-16 41" stroke="#F1FEF9" stroke-width="10"/>
+<path d="M137 71h22m-22 22h30m-28 22h20" stroke="url(#pulse)" stroke-width="8"/>
+<circle cx="166" cy="71" r="8" stroke="#16C38C" stroke-width="6"/>
+<circle cx="174" cy="93" r="8" stroke="#16C38C" stroke-width="6"/>
+<circle cx="165" cy="115" r="8" stroke="#16C38C" stroke-width="6"/>
+<path d="M119 20l9-16m11 26l16-13m-9 30h17" stroke="#71DC19" stroke-width="10"/>
+</g>
+<g fill="#18CA8E"><circle cx="55" cy="117" r="4.8"/><circle cx="75" cy="117" r="4.8"/><circle cx="95" cy="117" r="4.8"/></g>
+<text x="197" y="110" xml:space="preserve" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="800" letter-spacing="-3"><tspan fill="#F5FFFB">Zap</tspan><tspan fill="#11B673">Api</tspan></text>
+</svg>

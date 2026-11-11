@@ -15,19 +15,20 @@ $db=$db??[];
 $ready=$protectedKey??false;
 ?>
 <!doctype html><html lang="pt-BR"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8"><link rel="icon" type="image/svg+xml" href="/whatsapp_assets/whatsapp_zapapi_favicon.svg"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?=instE(match($mode) {
  'install'=>'Instalação inicial', 'installed'=>'Sistema instalado',
  'login'=>'Acesso do administrador', 'dashboard'=>'Administração',
  default=>'WhatsApp Gateway'
-})?> · WhatsApp Gateway</title>
+})?> · ZapApi</title>
 <style>
 :root{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#163731;color-scheme:light}
 *{box-sizing:border-box}body{margin:0;background:#f2f7f5;min-height:100vh}a{color:inherit;text-decoration:none}button,input{font:inherit}
 .top{background:#0a3029;color:white;padding:18px 0}.wrap{width:min(1040px,calc(100% - 36px));margin:auto}.topinner{display:flex;justify-content:space-between;align-items:center;gap:14px}.brand{font-size:1.12rem;font-weight:800;letter-spacing:-.035em}.brand i{font-style:normal;color:#4be5b2}.top a.link{font-size:.86rem;color:#cce5dc}.main{padding:62px 0 100px}.intro{text-align:center;max-width:710px;margin:0 auto 37px}.eyebrow{font-size:.76rem;letter-spacing:.14em;color:#138768;font-weight:850;text-transform:uppercase;margin-bottom:12px}.intro h1{font-size:clamp(2rem,4.5vw,3rem);line-height:1.15;letter-spacing:-.05em;margin:0 0 15px}.intro p{color:#647972;line-height:1.65;margin:0}.grid{display:grid;grid-template-columns:1.25fr .75fr;gap:23px;align-items:start}.box{border:1px solid #d9e7e0;background:#fff;border-radius:17px;padding:30px;box-shadow:0 15px 42px rgba(13,66,47,.055)}.box h2{font-size:1.35rem;letter-spacing:-.035em;margin:0 0 8px}.box p{line-height:1.55;color:#61766e;font-size:.89rem}.form{display:grid;gap:16px;margin-top:24px}.form label{display:block;font-size:.86rem;font-weight:750;color:#355248}.form input{display:block;width:100%;margin-top:7px;padding:13px 14px;border:1px solid #c9dad0;border-radius:10px;outline:none;background:#fff;color:#183f31}.form input:focus{border-color:#18a979;box-shadow:0 0 0 3px #18a97920}.two{display:grid;grid-template-columns:1fr 1fr;gap:13px}.btn{display:inline-flex;align-items:center;justify-content:center;padding:13px 19px;font-weight:800;border-radius:10px;border:0;background:#0a654e;color:white;cursor:pointer}.btn:hover{background:#087b5d}.btn:disabled{opacity:.45;cursor:not-allowed}.btn-outline{background:#e5f6ed;color:#07583e}.notice{border-radius:11px;padding:13px 16px;line-height:1.6;font-size:.85rem;margin-top:17px}.warn{background:#fff7e6;border:1px solid #f0d7a5;color:#795b23}.error{background:#fff0ef;border:1px solid #edc6be;color:#9c2c25}.success{background:#e9f9ef;border:1px solid #c7ead4;color:#116a49}.steps{display:grid;gap:21px;margin-top:23px}.step{display:flex;gap:13px}.num{flex:none;width:32px;height:32px;border-radius:10px;background:#dbf8e9;color:#087755;display:grid;place-items:center;font-weight:850}.step b{font-size:.9rem}.step p{margin:4px 0 0;font-size:.83rem}.mono{font-family:ui-monospace,Consolas,monospace;font-size:.8rem;background:#eff5f2;padding:3px 6px;border-radius:5px;overflow-wrap:anywhere}.footer{padding:28px 0 36px;font-size:.8rem;text-align:center;color:#7a8c85}.tablewrap{overflow-x:auto}.table{border-collapse:collapse;width:100%;min-width:660px;text-align:left}.table th,.table td{padding:15px 9px;border-bottom:1px solid #e4eee8;font-size:.82rem}.table th{color:#61756d}.badge{font-size:.75rem;font-weight:750;background:#fff4d8;color:#835b12;border-radius:22px;padding:5px 10px}.badge.active{background:#dcf6e8;color:#116744}.act{border:1px solid #b7ddd0;background:#eff9f4;padding:8px 12px;border-radius:8px;font-size:.78rem;font-weight:800;color:#096749;cursor:pointer}.act.danger{color:#9b5130;border-color:#efceb9;background:#fff6eb}.headerline{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:22px}.headerline h2{margin:0}.stats{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:20px}.stat{padding:15px 19px;background:#eff7f1;border-radius:13px;min-width:130px}.stat strong{font-size:1.5rem}.stat small{display:block;color:#678076}.row-actions{display:flex;gap:7px;flex-wrap:wrap}.logout{background:none;border:0;color:#d7f2e8;font-weight:700;cursor:pointer}@media(max-width:740px){.main{padding:35px 0 70px}.grid{grid-template-columns:1fr}.box{padding:22px}.two{grid-template-columns:1fr}.topinner{flex-wrap:wrap}}
+ .zapapi-brand{display:block;width:188px;height:auto;max-height:58px;object-fit:contain}@media(max-width:740px){.zapapi-brand{width:146px}}
 </style></head><body>
 <header class="top"><div class="wrap topinner">
-<a class="brand" href="/">✳ WhatsApp <i>Gateway</i></a>
+<a class="brand" href="/"><img class="zapapi-brand" src="/whatsapp_assets/whatsapp_zapapi_logo.svg" width="188" height="53" alt="ZapApi"></a>
 <div><a class="link" href="/">Página inicial</a> &nbsp; · &nbsp; <a class="link" href="/admin">Administração</a>
 <?php if($mode==='dashboard'): ?>
 <form style="display:inline" action="/admin/sair" method="post"><input type="hidden" name="csrf" value="<?=instE($csrf)?>"><button class="logout" type="submit">Sair</button></form>
@@ -108,5 +109,5 @@ $ready=$protectedKey??false;
 <div class="box" style="max-width:600px;margin:auto;text-align:center"><a class="btn" href="/install">Voltar ao instalador</a></div>
 <?php endif;?>
 </div></main>
-<footer class="footer"><div class="wrap">WhatsApp Gateway · Área de configuração protegida · Não afiliado à Meta</div></footer>
+<footer class="footer"><div class="wrap">ZapApi · Área de configuração protegida · Não afiliado à Meta</div></footer>
 </body></html>

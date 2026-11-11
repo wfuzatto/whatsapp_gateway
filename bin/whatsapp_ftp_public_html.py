@@ -92,6 +92,7 @@ def main():
     files = [pathlib.Path(".htaccess")]
     files += sorted(pathlib.Path("public").glob("whatsapp_*.php"))
     files += [pathlib.Path("public/.htaccess")]
+    files += sorted(pathlib.Path("public/whatsapp_assets").glob("whatsapp_*.svg"))
     files += sorted(pathlib.Path("src").glob("whatsapp_*.php"))
     files += [pathlib.Path("bin/whatsapp_worker.php"),
               pathlib.Path("bin/whatsapp_manage.php"),

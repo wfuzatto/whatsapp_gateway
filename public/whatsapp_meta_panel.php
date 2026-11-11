@@ -24,9 +24,9 @@ $advancedExample=json_encode([
 ],JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 ?>
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8">
+<html lang="pt-BR"><head><meta charset="utf-8"><link rel="icon" type="image/svg+xml" href="/whatsapp_assets/whatsapp_zapapi_favicon.svg">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Integração Meta | WhatsApp Gateway</title>
+<title>Integração Meta | ZapApi</title>
 <style>
 :root{font-family:Inter,ui-sans-serif,-apple-system,Segoe UI,Arial,sans-serif;color:#14362e;background:#f3f8f5}
 *{box-sizing:border-box}body{margin:0}h1,h2,h3,p{margin-top:0}h1,h2,h3{letter-spacing:-.036em}
@@ -81,8 +81,9 @@ a.link{color:#087855;text-decoration:underline}
 footer{max-width:1180px;margin:0 auto 25px;padding:0 24px;color:#72887d;font-size:.78rem}
 @media(max-width:850px){.grid{grid-template-columns:1fr}.span2{grid-column:auto}}
 @media(max-width:600px){main{padding:25px 15px 55px}.box{padding:19px}.intro{display:block}.tag{display:inline-block;margin-top:16px}.twocol{grid-template-columns:1fr}.nav{padding:15px}.navlinks{gap:8px}.navlinks a{font-size:.76rem}}
+ .zapapi-brand{display:block;width:188px;height:auto;max-height:58px;object-fit:contain}@media(max-width:600px){.zapapi-brand{width:138px}}
 </style></head><body>
-<header><div class="nav"><a class="logo" href="/painel">✳ Gateway <span>WhatsApp</span></a>
+<header><div class="nav"><a class="logo" href="/painel"><img class="zapapi-brand" src="/whatsapp_assets/whatsapp_zapapi_logo.svg" width="188" height="53" alt="ZapApi"></a>
 <div class="navlinks"><a href="/painel">Painel</a><a href="/painel/meta">Integração Meta</a><a href="https://developers.facebook.com/apps/" rel="noreferrer">Meta Developers</a></div>
 </div></header>
 <main>
@@ -219,5 +220,5 @@ footer{max-width:1180px;margin:0 auto 25px;padding:0 24px;color:#72887d;font-siz
 </section>
 </div>
 </main>
-<footer>WhatsApp Gateway · Integração Cloud API oficial da Meta · Os templates ficam sujeitos às políticas e revisão da Meta.</footer>
+<footer>ZapApi · Integração Cloud API oficial da Meta · Os templates ficam sujeitos às políticas e revisão da Meta.</footer>
 </body></html>
