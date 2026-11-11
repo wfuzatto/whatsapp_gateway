@@ -46,3 +46,6 @@ jobs:
           FTP_PROTOCOL: ftp
           FTP_PATH: /public_html/
         run: python3 bin/whatsapp_ftp_public_html.py
+
+      - name: Validar politicas, termos e exclusao por HTTPS apos publicacao
+        run: python3 bin/whatsapp_http_live.py

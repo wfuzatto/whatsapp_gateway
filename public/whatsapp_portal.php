@@ -173,7 +173,7 @@ header('X-Robots-Tag: '.($mode==='landing'?'index, follow':'noindex, nofollow'))
      <label>Senha <input type="password" name="password" minlength="12" maxlength="128" autocomplete="new-password" required placeholder="12+ caracteres, letras e números"></label>
      <label>Confirme a senha <input type="password" name="confirm_password" minlength="12" maxlength="128" autocomplete="new-password" required></label>
     </div>
-    <label class="checkboxline"><input type="checkbox" name="accept_terms" value="yes" required><span>Entendo que estes valores são propostas, que a conta fica pendente de ativação e que tarifas da Meta serão adicionais. Concordo com o armazenamento dos dados fornecidos para cadastro e contato comercial.</span></label>
+    <label class="checkboxline"><input type="checkbox" name="accept_terms" value="yes" required><span>Entendo que estes valores são propostas, que a conta fica pendente de ativação e que tarifas da Meta serão adicionais. Li a <a href="/politicas/" target="_blank" rel="noopener noreferrer">Política de Privacidade</a> e os <a href="/termos/" target="_blank" rel="noopener noreferrer">Termos de Serviço</a>, e concordo com o tratamento dos dados fornecidos para cadastro e contato comercial.</span></label>
     <button class="btn btn-dark" type="submit" <?=$ready?'':'disabled'?> style="<?=$ready?'':'opacity:.55;cursor:not-allowed'?>">Criar meu tenant →</button>
    </form>
    <p class="auth-bottom">Já possui conta? <a class="small-link" href="/entrar">Entrar</a></p>
@@ -229,7 +229,7 @@ header('X-Robots-Tag: '.($mode==='landing'?'index, follow':'noindex, nofollow'))
 </main>
 <footer class="footer"><div class="container footinner">
  <div><strong>ZapApi</strong> · Integrações oficiais, organizadas por empresa.</div>
- <div><a href="/#planos">Planos</a> &nbsp;·&nbsp; <a href="/entrar">Acesso do cliente</a> &nbsp;·&nbsp; <a href="/health">Status da API</a></div>
+ <div><a href="/#planos">Planos</a> &nbsp;·&nbsp; <a href="/entrar">Acesso</a> &nbsp;·&nbsp; <a href="/politicas/">Privacidade</a> &nbsp;·&nbsp; <a href="/termos/">Termos</a> &nbsp;·&nbsp; <a href="/exclusao/">Exclusão de dados</a></div>
  <div>Software independente, não afiliado à Meta.</div>
 </div></footer>
 </body>

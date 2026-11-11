@@ -43,7 +43,22 @@ def main():
         print("GET",asset,status,"content-type",ctype,flush=True)
         if status!=200 or mark not in body or "svg" not in ctype.lower():
             raise RuntimeError("Arquivo de marca nao disponivel em producao: "+asset)
-    print("VALIDACAO HTTPS APROVADA: API, landing, login e identidade ZapApi",flush=True)
+    for legal,expected in [
+        ("/politicas/","Política de Privacidade"),
+        ("/termos/","Termos de Serviço"),
+        ("/exclusao/","Exclusão de Dados"),
+        ("/exclusao/index.php","Exclusão de Dados")
+    ]:
+        status,headers,body=probe(legal)
+        ctype=headers.get("Content-Type","")
+        print("GET",legal,status,"content-type",ctype,flush=True)
+        if status!=200 or expected not in body or "html" not in ctype.lower():
+            raise RuntimeError("Pagina legal publica ausente ou com roteamento incorreto: "+legal)
+    status,headers,body=probe("/assets/legal.css")
+    print("GET /assets/legal.css",status,"content-type",headers.get("Content-Type",""),flush=True)
+    if status!=200 or "--green" not in body or "css" not in headers.get("Content-Type","").lower():
+        raise RuntimeError("Folha de estilos legal nao carregou")
+    print("VALIDACAO HTTPS APROVADA: API, landing, login, marca e paginas legais",flush=True)
 
 if __name__=="__main__":
     try:main()

@@ -49,6 +49,21 @@ try {
     }
     $path = rtrim($path,'/') ?: '/';
 
+    // Fallback em ambientes que encaminham URLs de arquivos legais ao front controller.
+    // Somente arquivos da lista fixa podem ser carregados, sem entrada arbitraria.
+    if ($method === 'GET' && in_array($path,['/politicas','/termos','/exclusao',
+            '/politicas/index.php','/termos/index.php','/exclusao/index.php'],true)) {
+        $slug=explode('/',trim($path,'/'))[0];
+        $legalFile=dirname(__DIR__).'/'.$slug.'/index.php';
+        if (is_file($legalFile)) { require $legalFile; exit; }
+    }
+    if ($method === 'GET' && $path === '/assets/legal.css') {
+        $css=dirname(__DIR__).'/assets/legal.css';
+        if (is_file($css)) {
+            header('Content-Type: text/css; charset=utf-8');
+            readfile($css); exit;
+        }
+    }
     if (WhatsAppMetaPanel::route($path, $method)) exit;
     if (WhatsAppInstaller::route($path, $method)) exit;
     if (WhatsAppPortal::route($path, $method)) exit;
