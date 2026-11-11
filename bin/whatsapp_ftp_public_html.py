@@ -97,7 +97,8 @@ def main():
     files += [pathlib.Path("bin/whatsapp_worker.php"),
               pathlib.Path("bin/whatsapp_manage.php"),
               pathlib.Path("database/whatsapp_schema.sql"),
-              pathlib.Path("database/whatsapp_migration_portal.sql")]
+              pathlib.Path("database/whatsapp_migration_portal.sql"),
+              pathlib.Path("database/whatsapp_mobile.sql")]
     if len(files) < 10 or not pathlib.Path("public/whatsapp_index.php").is_file():
         fail("Arquivos essenciais ausentes: deploy interrompido")
     for file in files:

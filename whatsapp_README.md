@@ -116,3 +116,19 @@ O instalador **não sobrescreve `.env` existente, não derruba tabelas e recusa 
 ## Integração Meta pelo painel do cliente
 
 Após ativar a assinatura, acesse `/painel/meta`. O cliente pode cadastrar e validar WABA ID, Phone Number ID e token de sistema, consultar status de templates, submeter modelos para análise via Graph API, solicitar inscrição no webhook global e criar/revogar suas próprias chaves de API. Nenhum token é revelado depois de salvo. Os dados são isolados por tenant. Consulte `docs/whatsapp_META_INTEGRACAO.md` para roteiro de configuração. A aprovação de templates é feita exclusivamente pela Meta; o software não os aprova automaticamente.
+
+
+## ZapApi Messenger Android (separado da V2)
+
+A V1 expõe uma API de aplicativo em `/mobile-api/v1/` que é **independente do login PHP do navegador e não usa credenciais Meta no Android**.
+
+- `GET /mobile-api/v1/health` — verifica disponibilidade do contrato.
+- `POST /mobile-api/v1/auth/login` — autentica usuário proprietário da tabela `whatsapp_users` com assinatura ativa; token de sessão opaco de sete dias.
+- `POST /mobile-api/v1/auth/logout` — revoga a sessão e remove registro de dispositivo.
+- `GET /mobile-api/v1/me`, `GET /mobile-api/v1/accounts`, `GET|POST /mobile-api/v1/conversations`.
+- `GET|POST /mobile-api/v1/conversations/{account_id}-{phone}/messages` — conversa restrita ao tenant. Texto livre apenas dentro da janela de atendimento de 24 horas, verificada no servidor.
+- `GET /mobile-api/v1/templates?account_id=...` — templates aprovados; `POST /mobile-api/v1/conversations/{id}/templates` — somente template aprovado e contato com consentimento registrado.
+- `POST /mobile-api/v1/devices` — armazena token FCM cifrado; envio de pushes exige serviço FCM do backend, ainda separado.
+- `GET /mobile-api/v1/contacts` — contatos autorizados do tenant.
+
+As tabelas novas são `whatsapp_mobile_sessions` e `whatsapp_mobile_devices`, criadas de forma aditiva via `database/whatsapp_mobile.sql` no primeiro login. Não altera nem recria banco existente. Chaves Meta permanecem no servidor. Login do superadministrador `/admin` não é aceito no app; cada cliente usa sua conta `/entrar`. Verificar janela e consentimento antes de envio; o app nunca contorna políticas da Meta.

@@ -8,6 +8,7 @@ require dirname(__DIR__) . '/src/whatsapp_Jobs.php';
 require dirname(__DIR__) . '/src/whatsapp_Portal.php';
 require dirname(__DIR__) . '/src/whatsapp_Installer.php';
 require dirname(__DIR__) . '/src/whatsapp_MetaPanel.php';
+require dirname(__DIR__) . '/src/whatsapp_Mobile.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -64,6 +65,7 @@ try {
             readfile($css); exit;
         }
     }
+    if (WhatsAppMobile::route($path, $method)) exit;
     if (WhatsAppMetaPanel::route($path, $method)) exit;
     if (WhatsAppInstaller::route($path, $method)) exit;
     if (WhatsAppPortal::route($path, $method)) exit;
