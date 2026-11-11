@@ -9,7 +9,10 @@ import sys
 
 HOST="ftp.zapapi1.hospedagemdesites.ws"
 PATHS=["/","/public_html","/public_html/public","/public_html/src",
-       "/public_html/bin","/public_html/database"]
+       "/public_html/bin","/public_html/database",
+       "/public_html/politicas","/public_html/termos","/public_html/exclusao",
+       "/public_html/assets","/public_html/zapapi_paginas_meta",
+       "/public_html/zapapi_paginas_meta/politicas"]
 def safe(name):
     n=posixpath.basename(str(name).rstrip("/"))
     if any(k in n.lower() for k in (".env","password","secret","key","credential","token","backup","config")):
