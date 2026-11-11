@@ -13,6 +13,7 @@ $selected=$current??null;
 $flash=$flash??null;
 $problem=$vars['error']??null;
 $list=$templateData['data']??[];
+$draft=$vars['draft']??[];
 $next=$templateData['paging']['cursors']['after']??null;
 $next=is_string($next)&&strlen($next)<600?$next:null;
 $advancedExample=json_encode([
@@ -144,25 +145,25 @@ footer{max-width:1180px;margin:0 auto 25px;padding:0 24px;color:#72887d;font-siz
 <label>Conexão Meta
 <select name="account_id" required><?php foreach($accounts as $a): ?><option value="<?=metaE($a['id'])?>" <?=$selected && $a['id']===$selected['id']?'selected':''?>><?=metaE($a['name'].' · '.$a['phone_number_id'])?></option><?php endforeach;?></select></label>
 <label>Modo de criação
-<select name="template_mode"><option value="simple">Editor de texto</option><option value="advanced">JSON avançado (usa campo abaixo)</option></select><small>Para autenticação OTP, mídia e botões avançados, selecione JSON avançado.</small></label>
+<select name="template_mode"><option value="simple" <?=($draft["template_mode"]??"simple")==="simple"?"selected":""?>>Editor de texto</option><option value="advanced" <?=($draft["template_mode"]??"")==="advanced"?"selected":""?>>JSON avançado (usa campo abaixo)</option></select><small>Para autenticação OTP, mídia e botões avançados, selecione JSON avançado.</small></label>
 </div>
 <div class="twocol">
-<label>Nome interno <input name="template_name" pattern="[a-z][a-z0-9_]{2,127}" maxlength="128" placeholder="confirmacao_reserva"></label>
-<label>Idioma <select name="template_language"><option value="pt_BR">Português (Brasil) — pt_BR</option><option value="en_US">English — en_US</option><option value="es_ES">Español — es_ES</option></select></label>
+<label>Nome interno <input name="template_name" value="<?=metaE($draft["template_name"]??"")?>" pattern="[a-z][a-z0-9_]{2,127}" maxlength="128" placeholder="confirmacao_reserva"></label>
+<label>Idioma <select name="template_language"><option value="pt_BR" <?=($draft["template_language"]??"pt_BR")==="pt_BR"?"selected":""?>>Português (Brasil) — pt_BR</option><option value="en_US" <?=($draft["template_language"]??"pt_BR")==="en_US"?"selected":""?>>English — en_US</option><option value="es_ES" <?=($draft["template_language"]??"pt_BR")==="es_ES"?"selected":""?>>Español — es_ES</option></select></label>
 </div>
 <label>Categoria <select name="template_category">
-<option value="UTILITY">UTILITY — atualizações transacionais</option><option value="MARKETING">MARKETING — campanhas/promocional</option></select>
+<option value="UTILITY" <?=($draft["template_category"]??"UTILITY")==="UTILITY"?"selected":""?>>UTILITY — atualizações transacionais</option><option value="MARKETING" <?=($draft["template_category"]??"UTILITY")==="MARKETING"?"selected":""?>>MARKETING — campanhas/promocional</option></select>
 <small>A Meta pode reclassificar o template; não marque promoção como UTILITY.</small></label>
-<label>Cabeçalho opcional <input name="template_header" maxlength="60" placeholder="Confirmação de reserva {{1}}"></label>
-<label>Exemplo para variável do cabeçalho <input name="header_examples" maxlength="220" placeholder="ABC123"><small>Preencha somente quando houver {{1}} no cabeçalho.</small></label>
+<label>Cabeçalho opcional <input name="template_header" value="<?=metaE($draft["template_header"]??"")?>" maxlength="60" placeholder="Confirmação de reserva {{1}}"></label>
+<label>Exemplo para variável do cabeçalho <input name="header_examples" value="<?=metaE($draft["header_examples"]??"")?>" maxlength="220" placeholder="ABC123"><small>Preencha somente quando houver {{1}} no cabeçalho.</small></label>
 <label>Mensagem principal (BODY)
-<textarea name="template_body" maxlength="1024" placeholder="Olá {{1}}, sua reserva para {{2}} foi confirmada." rows="4"></textarea><small>Variáveis devem ser sequenciais: {{1}}, {{2}} etc.</small></label>
+<textarea name="template_body" maxlength="1024" placeholder="Olá {{1}}, sua reserva para {{2}} foi confirmada." rows="4"><?=metaE($draft["template_body"]??"")?></textarea><small>Variáveis devem ser sequenciais: {{1}}, {{2}} etc.</small></label>
 <label>Exemplos de cada variável do BODY (um por linha)
-<textarea name="body_examples" maxlength="1500" rows="3" placeholder="João&#10;20/11/2026"></textarea><small>Se houver {{1}} e {{2}}, informe dois exemplos em linhas separadas. Exigido pela Meta.</small></label>
-<label>Rodapé opcional <input name="template_footer" maxlength="60" placeholder="Equipe de atendimento"></label>
+<textarea name="body_examples" maxlength="1500" rows="3" placeholder="João&#10;20/11/2026"><?=metaE($draft["body_examples"]??"")?></textarea><small>Se houver {{1}} e {{2}}, informe dois exemplos em linhas separadas. Exigido pela Meta.</small></label>
+<label>Rodapé opcional <input name="template_footer" value="<?=metaE($draft["template_footer"]??"")?>" maxlength="60" placeholder="Equipe de atendimento"></label>
 <details class="details"><summary>Editor JSON avançado — AUTHENTICATION, mídia e botões</summary>
 <p class="help">Selecione o modo JSON avançado acima; informe um objeto com <span class="codeinline">name</span>, <span class="codeinline">language</span>, <span class="codeinline">category</span> e <span class="codeinline">components</span>. Exemplo ilustrativo de OTP (ajuste ao esquema da Meta):</p>
-<textarea name="advanced_json" class="code" maxlength="18000" rows="12"><?=metaE($advancedExample)?></textarea>
+<textarea name="advanced_json" class="code" maxlength="18000" rows="12"><?=metaE($draft["advanced_json"]??$advancedExample)?></textarea>
 <p class="help">Para cabeçalho de imagem/vídeo/documento, obtenha antes o <span class="codeinline">header_handle</span> pelo processo de upload de exemplos da Meta. O editor não faz esse upload ainda.</p></details>
 <button class="btn" type="submit" <?=$active?'':'disabled'?>>Enviar template para análise da Meta →</button>
 </form>

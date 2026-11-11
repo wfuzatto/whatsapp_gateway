@@ -59,13 +59,65 @@ final class WhatsAppMetaPanel {
         $_SESSION['whatsapp_meta_flash']=['message'=>$msg,'type'=>$type];
         header('Location: /painel/meta',true,303);exit;
     }
-    private static function metaError(MetaFailure $e): HttpError {
+    /**
+     * A Meta frequentemente retorna apenas "Invalid parameter" em error.message.
+     * Os detalhes reais geralmente estao em error_user_msg ou error_data.details.
+     * Nunca incluir o corpo de requisicao nem o Access Token no diagnostico.
+     */
+    public static function formatMetaError(MetaFailure $e): string {
         $error=$e->metaBody['error']??[];
+        if(!is_array($error)) $error=[];
         $code=(int)($error['code']??0);
-        $msg=is_string($error['message']??null)?$error['message']:'Solicitação rejeitada';
-        // Evita ecoar tokens ou grande volume de resposta externa.
-        $msg=substr(str_replace(["\r","\n"],' ', $msg),0,220);
-        return new HttpError('Meta HTTP '.$e->upstreamStatus.($code?' (código '.$code.')':'').': '.$msg,422);
+        $subcode=(int)($error['error_subcode']??0);
+        $prefix='Meta HTTP '.$e->upstreamStatus;
+        if($code)$prefix.=' (código '.$code.($subcode?'/'.$subcode:'').')';
+        $pieces=[];
+        $details=$error['error_data']??[];
+        $candidates=[
+            $error['error_user_title']??null,
+            $error['error_user_msg']??null,
+            is_array($details)?($details['details']??null):null,
+            $error['message']??null
+        ];
+        foreach($candidates as $part){
+            if(!is_string($part)||trim($part)==='')continue;
+            $part=self::safeMetaText($part);
+            if($part===''||in_array(strtolower($part),['invalid parameter','solicitação rejeitada'],true)
+                && count($pieces)>0)continue;
+            if(!in_array($part,$pieces,true))$pieces[]=$part;
+            if(count($pieces)>=3)break;
+        }
+        if(!$pieces)$pieces[]='Requisição rejeitada pela Meta';
+        if($code===100 && count($pieces)===1 &&
+            strtolower($pieces[0])==='invalid parameter')
+            $pieces[]='A Meta não informou o campo inválido. Confira componentes, exemplos e permissões do WABA.';
+        $fieldPaths=$details['blame_field_specs']??null;
+        if(is_array($fieldPaths)){
+            $fields=[];
+            foreach($fieldPaths as $fieldPath){
+                if(!is_array($fieldPath))continue;
+                $segments=array_filter($fieldPath,static fn($x)=>is_string($x)||
+                    is_int($x));
+                $path=implode('.',array_map('strval',$segments));
+                if(preg_match('/^[a-zA-Z0-9_.]{1,100}$/D',$path))$fields[]=$path;
+            }
+            if($fields)$pieces[]='Campo(s): '.implode(', ',array_slice($fields,0,3));
+        }
+        $trace=$error['fbtrace_id']??null;
+        if(is_string($trace)&&preg_match('/^[A-Za-z0-9_-]{6,128}$/D',$trace))
+            $pieces[]='Meta trace: '.$trace;
+        return substr($prefix.': '.implode(' | ',$pieces),0,1050);
+    }
+    private static function safeMetaText(string $part): string {
+        $part=trim(preg_replace('/[\\x00-\\x1f\\x7f]+/u',' ', $part)??'');
+        // Informacoes arbitrarias de terceiros nao devem reexibir segredos.
+        $part=preg_replace('/\\bBearer\\s+\\S+/i','Bearer [oculto]',$part)??$part;
+        $part=preg_replace('/\\b(EAA[A-Za-z0-9_-]{18,})\\b/','[token oculto]',$part)??$part;
+        $part=preg_replace('/(access_token[=:]\\s*)[^,\\s]+/i','$1[oculto]',$part)??$part;
+        return substr($part,0,240);
+    }
+    private static function metaError(MetaFailure $e): HttpError {
+        return new HttpError(self::formatMetaError($e),422);
     }
     private static function verifyPhone(array $credential,string $waba,string $phone): void {
         $cursor=null;$visited=[];$matched=false;
@@ -269,10 +321,23 @@ final class WhatsAppMetaPanel {
         if(!$s->rowCount())throw new HttpError('Chave não encontrada.',404);
         self::flash('Chave de API revogada.');
     }
+    private static function draftFromPost(): array {
+        if(($_POST['action']??'')!=='submit')return [];
+        $limits=['account_id'=>20,'template_mode'=>16,'template_name'=>128,
+            'template_language'=>20,'template_category'=>30,'template_header'=>60,
+            'header_examples'=>220,'template_body'=>1024,'body_examples'=>1500,
+            'template_footer'=>60,'advanced_json'=>18000];
+        $draft=[];
+        foreach($limits as $key=>$max){
+            if(isset($_POST[$key])&&is_string($_POST[$key]))
+                $draft[$key]=substr($_POST[$key],0,$max);
+        }
+        return $draft;
+    }
     private static function render(array $user,array $vars=[]): void {
         $tenantId=(int)$user['tenant_id'];
         $accounts=self::listAccounts($tenantId);
-        $selectedId=(int)($_GET['conta']??0);
+        $selectedId=(int)($vars['draft']['account_id']??($_GET['conta']??0));
         if(!$selectedId && $accounts)$selectedId=(int)$accounts[0]['id'];
         $current=null;
         foreach($accounts as $a)if((int)$a['id']===$selectedId)$current=$a;
@@ -327,19 +392,19 @@ final class WhatsAppMetaPanel {
             }
             try{
                 $user=self::currentUser();
-                self::render($user,['error'=>$e->getMessage()]);
+                self::render($user,['error'=>$e->getMessage(),'draft'=>self::draftFromPost()]);
             }catch(Throwable $ignored){response($e->httpStatus,['error'=>$e->getMessage()]);}
             return true;
         }catch(MetaFailure $e){
             http_response_code(422);
             $user=self::currentUser();
-            self::render($user,['error'=>self::metaError($e)->getMessage()]);
+            self::render($user,['error'=>self::metaError($e)->getMessage(),'draft'=>self::draftFromPost()]);
             return true;
         }catch(Throwable $e){
             error_log('Meta panel failure: '.get_class($e));
             http_response_code(503);
             try{$user=self::currentUser();self::render($user,
-                ['error'=>'Não foi possível concluir a operação. Verifique a conexão e tente novamente.']);}
+                ['error'=>'Não foi possível concluir a operação. Verifique a conexão e tente novamente.', 'draft'=>self::draftFromPost()]);}
             catch(Throwable $ignored){response(503,['error'=>'Erro interno']);}
             return true;
         }
