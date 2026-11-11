@@ -115,12 +115,28 @@ def main():
         ftp.cwd(REMOTE_ROOT)
 
         names = remote_listing(ftp, REMOTE_ROOT)
-        # Um sistema alheio ja instalado nao deve ter a configuracao de
-        # roteamento PHP substituida por um simples teste de publicacao.
-        protected = sorted(names.intersection({"wp-config.php", "wp-content", "index.php", "index.html"}))
-        if protected:
-            fail("Ha arquivos de outro site em /public_html: " + ", ".join(protected)
-                 + ". Nenhum arquivo do gateway foi publicado.")
+        # NUNCA substituir sites nao reconhecidos. A raiz pode conter um
+        # index.php criado pelo provedor ou pelo administrador. Preserva-lo
+        # somente se esta instalacao ja tiver assinatura estrutural do gateway.
+        conflicting = sorted(names.intersection({"wp-config.php", "wp-content"}))
+        if conflicting:
+            fail("Publicacao bloqueada: outro site detectado: " + ", ".join(conflicting))
+        homepage = sorted(names.intersection({"index.php", "index.html"}))
+        if homepage:
+            router = retrieve_if_exists(ftp, REMOTE_ROOT + "/public/whatsapp_index.php", names)
+            public_rules = retrieve_if_exists(ftp, REMOTE_ROOT + "/public/.htaccess", names)
+            root_rules = retrieve_if_exists(ftp, REMOTE_ROOT + "/.htaccess", names)
+            recognized = (
+                router is not None and b"WhatsAppPortal::route" in router and
+                b"WhatsAppInstaller::route" in router and
+                public_rules is not None and b"whatsapp_index.php" in public_rules and
+                root_rules is not None and b"RewriteRule ^(.*)$ public/$1" in root_rules
+            )
+            if not recognized:
+                fail("index.php/index.html detectado, mas nao foi possivel confirmar "
+                     "uma instalacao existente deste gateway. Nenhum arquivo alterado.")
+            print("Gateway existente reconhecido. Arquivos index.php/index.html "
+                  "serao preservados sem qualquer alteracao.")
         # Preparar uma chave aleatoria de primeiro uso FORA de public_html.
         # O operador a le pelo FileZilla na raiz FTP, nunca por URL.
         done = retrieve_if_exists(ftp, "/whatsapp_install_done.txt", names)
