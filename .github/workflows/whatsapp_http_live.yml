@@ -1,0 +1,18 @@
+name: WhatsApp - Validar site recuperado por HTTPS
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/whatsapp_http_live.yml
+      - bin/whatsapp_http_live.py
+permissions:
+  contents: read
+jobs:
+  live-http:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar HTTPS publico sem autenticacao
+        run: python3 bin/whatsapp_http_live.py
