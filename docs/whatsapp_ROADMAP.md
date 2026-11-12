@@ -5,18 +5,21 @@ Este software é um **gateway inicial funcional**, não substitui todos os módu
 ## Implementado (código)
 - Cloud API envio de payloads oficiais de mensagens, síncrono/assíncrono.
 - Verificação e ingestão de webhooks, persistência e entrega de callbacks HMAC.
-- Mídia upload/metadados/delete; gerenciamento básico de templates, phones, business profile e flows via Graph.
+- Mídia upload/metadados/delete; gerenciamento de templates, phones, business profile e flows via Graph.
+- Central web por tenant em `/painel/conversas`: inbox, início de conversa por template aprovado, envio de texto/mídia na janela de 24 horas, contatos, consentimento e respostas rápidas.
+- Consulta paginada de status dos templates Meta e envio de novos templates para análise; aprovação permanece sob controle da Meta.
+- Campanhas com rascunho e confirmação, templates aprovados, verificação de consentimento no envio, agendamento e acompanhamento individual de entregas.
 - Logs de eventos, contatos, janela de atendimento e consentimento.
 - Multinúmero com tokens criptografados, API keys e worker.
 - CI PHP lint, testes de utilidades, proteção de arquivos.
 
 ## Pendente / implementar antes de uso empresarial amplo
 - Suite E2E com Graph v26, validação de limites e políticas por tipo de mensagem e mídia.
-- Painel web administrativo com login, RBAC, caixa de entrada multiagente, respostas rápidas, métricas, filtros e campanhas com revisão/consentimento.
+- Atribuição de conversas por agente, RBAC para equipes, métricas e filtros operacionais avançados.
 - Flow Data Channel: endpoint criptografado, troca de chaves, tratamento de dados e assinatura, testes de fluxos.
 - Embedded Signup / Tech Provider: OAuth, troca de code, Business Login, sessão, token, WABA subscription e onboarding automatizado, conforme política e aprovação da Meta.
 - Catálogos e produtos: integração Catalog API, Commerce Manager, product sets, pedidos.
-- Templates avançados: revisão, categoria, qualidade, autenticação OTP, componentes, localizações, paginação Graph completa e status.
+- Suporte a templates avançados: autenticação OTP, cabeçalhos de mídia, componentes interativos, localizações e botões dinâmicos.
 - Cobrança/conversas: insights, analytics, preço por categoria/mercado e relatório financeiro reconciliado.
 - Mensagens: validação detalhada por tipo, WhatsApp Payments (quando elegível), localização, reações, stickers, templates interativos, Flows/Carousels e mudanças no schema.
 - Rate limit distribuído, backpressure, filas escaláveis, métricas Prometheus/OpenTelemetry, dashboards de observabilidade.

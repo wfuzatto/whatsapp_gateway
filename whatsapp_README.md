@@ -13,7 +13,7 @@ Gateway REST em **PHP 8.2+ e MySQL 8.0+**, sem dependências de terceiros empaco
 - Webhooks são verificados pelo HMAC da Meta e roteados pelo `phone_number_id` ou pelo WABA.
 - Um cliente suspenso não pode autenticar e seus jobs não são despachados; contas suspensas também não são selecionáveis.
 
-O **prefixo obrigatório** dos 9 nomes das tabelas é `whatsapp_`. Os arquivos comuns do repositório também são nomeados com `whatsapp_`. Exceções técnicas: `.gitignore` e `.htaccess` (nomes obrigatórios para Git/Apache), além do arquivo local não versionado `.env`. Os nomes de colunas (`id`, `tenant_id`, etc.) não precisam de prefixo.
+O **prefixo obrigatório** dos nomes das tabelas é `whatsapp_`. Os arquivos comuns do repositório também são nomeados com `whatsapp_`. Exceções técnicas: `.gitignore` e `.htaccess` (nomes obrigatórios para Git/Apache), além do arquivo local não versionado `.env`. Os nomes de colunas (`id`, `tenant_id`, etc.) não precisam de prefixo.
 
 ## Instalação limpa
 1. PHP 8.2+ com `pdo_mysql`, `curl`, `sodium`, `fileinfo`; MySQL 8.0+; servidor HTTPS.
@@ -63,16 +63,22 @@ Testes: `php tests/whatsapp_smoke.php`. O GitHub Actions executa os testes de in
 Fontes oficiais: https://www.postman.com/meta/whatsapp-business-platform/overview e https://developers.facebook.com/docs/whatsapp/cloud-api/overview
 
 
+## Central web do cliente (V2)
+
+Depois de entrar em `/entrar`, a central do tenant fica em `/painel/conversas`. Ela oferece inbox e histórico de mensagens, início de conversa com template aprovado, texto e mídia dentro da janela de 24 horas, lista de contatos e consentimento, respostas rápidas e campanhas com rascunho, confirmação e agendamento. O status dos templates vem da Graph API; somente a Meta pode aprovar ou rejeitar modelos.
+
+As tabelas da central (`whatsapp_conversations`, `whatsapp_quick_replies`, `whatsapp_campaigns` e `whatsapp_campaign_recipients`) são adicionadas de forma idempotente por `database/whatsapp_migration_console.sql` no primeiro acesso à central ou pelo worker. As consultas são sempre limitadas ao tenant da sessão e à conexão escolhida. Campanhas e filas dependem do worker já configurado com `php bin/whatsapp_worker.php --loop` ou `--once` via cron.
+
 ## Publicacao FTP em /public_html/
 
-O workflow [WhatsApp - Publicar FTP em public_html](https://github.com/wfuzatto/whatsapp_gateway/actions/workflows/whatsapp_ftp_test.yml) transfere os arquivos da aplicacao para a pasta **/public_html/** (nao para a raiz FTP). Esta tarefa e acionada manualmente em Actions > Run workflow e quando o proprio workflow e atualizado.
+O workflow [WhatsApp - Publicar FTP em public_html](https://github.com/wfuzatto/whatsapp_gateway/actions/workflows/whatsapp_ftp_test.yml) transfere os arquivos da aplicacao para a pasta **/public_html/** (nao para a raiz FTP). Ele publica automaticamente em pushes para `main` que alterem arquivos da aplicação; também pode ser acionado manualmente em Actions > Run workflow.
 
 - Destino: `ftp.zapapi1.hospedagemdesites.ws:21/public_html/`
 - Protocolo: `ftp` sem criptografia, por solicitacao do administrador.
 - Usuario e senha: `FTP_USERNAME` e `FTP_PASSWORD` guardados em GitHub Actions Secrets.
 - Antes de substituir um arquivo existente, cria-se backup ZIP fora do diretorio publico em `/whatsapp_gateway_backups/`.
 - Preserva outros arquivos e pastas no servidor; nao apaga nada do site.
-- Envia somente os arquivos de execucao: `.htaccess`, `public/`, `src/`, scripts administrativos `bin/` e esquema `database/whatsapp_schema.sql`. Nao publica `.github`, testes, documentacao, nem arquivos `.env`.
+- Envia somente os arquivos de execucao: `.htaccess`, `public/`, `src/`, scripts administrativos `bin/` e esquemas/migrações `database/`. Não sobrescreve `public/whatsapp_portal.php` (landing, login e cadastro) nem `public/whatsapp_home.php`.
 - Confere com download e SHA256 cada arquivo enviado.
 - Se houver `index.php`, `index.html` ou WordPress na raiz, nao sobrescreve um projeto alheio e interrompe o deploy.
 - Importante: os arquivos do PHP ainda exigem um `.env` privado configurado no servidor e o banco `whatsapp_` preparado; publicar arquivos nao configura credenciais nem executa migracoes automaticamente.
@@ -82,7 +88,7 @@ O workflow [WhatsApp - Publicar FTP em public_html](https://github.com/wfuzatto/
 
 ## Página inicial de diagnóstico
 
-A rota `GET /` apresenta uma página pública informativa em `public/whatsapp_home.php`, sem carregar credenciais ou consultar o banco. O status `GET /health` confirma apenas a disponibilidade do endpoint HTTP/PHP; **não valida** a conexão com MySQL, a API Meta ou a configuração `.env`. Essa página não é o painel de administração: login, gestão visual de tenants e inbox continuam pendentes no roadmap.
+A rota `GET /` apresenta a landing page pública em `public/whatsapp_portal.php`; o deploy preserva esse arquivo. O status `GET /health` confirma apenas a disponibilidade do endpoint HTTP/PHP; **não valida** a conexão com MySQL, a API Meta ou a configuração `.env`.
 
 ## Portal público, planos e autocadastro
 - `GET /`: landing page comercial responsiva e planos; os valores são **propostas de mensalidade**, não preços oficiais finais.
@@ -95,7 +101,7 @@ A rota `GET /` apresenta uma página pública informativa em `public/whatsapp_ho
 - Instalação nova: importe `database/whatsapp_schema.sql`. Banco existente com as nove tabelas anteriores: aplique **apenas** `database/whatsapp_migration_portal.sql` uma vez. Não importe os dois scripts no mesmo banco.
 - O cadastro só é habilitado quando o banco e o catálogo de planos estão disponíveis. Não exponha dados do banco ou segredos em repositório público nem utilize FTP comum para novas senhas.
 
-A ativação de número, pagamentos automáticos, e-mail de confirmação e caixa de entrada visual ainda não estão disponíveis. Não confunda a landing de planos com uma plataforma BSP completa.
+A ativação de número, pagamentos automáticos, e-mail de confirmação, atribuição multiagente e métricas avançadas ainda não estão disponíveis. Não confunda a landing de planos com uma plataforma BSP completa.
 
 ## Assistente inicial de instalação — `/install`
 Abra **https://zapapi.inf.br/install** (ou o domínio temporário da hospedagem).
@@ -106,7 +112,7 @@ O instalador mostra os parâmetros do banco remoto pré-configurados (host: `zap
 3. Senha atual do MySQL, digitada apenas pelo navegador HTTPS; nunca adicione ao GitHub.
 4. Nome/e-mail e senha nova do superadministrador (mínimo 12 caracteres com letras e números).
 
-Depois de confirmar, a instalação verifica acesso ao banco, cria as 14 tabelas com prefixo `whatsapp_`, carrega os três planos iniciais, registra o administrador, gera `MASTER_KEY_BASE64` e token de verificação, e salva o `.env` privado em `/home/zapapi1/.env`. O arquivo não é enviado por FTP nem publicado no Git. A chave temporária é removida e um marcador de instalação é gravado fora do diretório público.
+Depois de confirmar, a instalação verifica acesso ao banco, cria as 18 tabelas com prefixo `whatsapp_`, carrega os três planos iniciais, registra o administrador, gera `MASTER_KEY_BASE64` e token de verificação, e salva o `.env` privado em `/home/zapapi1/.env`. O arquivo não é enviado por FTP nem publicado no Git. A chave temporária é removida e um marcador de instalação é gravado fora do diretório público.
 
 Depois, acesse **`/admin`** ou **`/admin/entrar`**. No painel, veja os tenants e ative/suspenda assinaturas manualmente. Ativar assinatura não cobra o cliente.
 

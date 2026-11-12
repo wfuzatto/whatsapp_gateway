@@ -176,6 +176,71 @@ CREATE TABLE whatsapp_admins (
   last_login_at DATETIME NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Operacao visual do cliente: conversas, respostas rapidas e campanhas.
+CREATE TABLE whatsapp_conversations (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id BIGINT UNSIGNED NOT NULL,
+  account_id BIGINT UNSIGNED NOT NULL,
+  wa_id VARCHAR(32) NOT NULL,
+  status ENUM('open','closed') NOT NULL DEFAULT 'open',
+  closed_at DATETIME DEFAULT NULL,
+  last_read_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_conversation (account_id,wa_id),
+  UNIQUE KEY uq_tenant_conversation (tenant_id,id),
+  INDEX idx_conversation_tenant_status (tenant_id,status,updated_at),
+  FOREIGN KEY (tenant_id,account_id) REFERENCES whatsapp_accounts(tenant_id,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE whatsapp_quick_replies (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(80) NOT NULL,
+  body VARCHAR(4096) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_quick_reply (tenant_id,name),
+  INDEX idx_quick_reply_tenant (tenant_id,id),
+  FOREIGN KEY (tenant_id) REFERENCES whatsapp_tenants(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE whatsapp_campaigns (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id BIGINT UNSIGNED NOT NULL,
+  account_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  template_name VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  template_language VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  template_category VARCHAR(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  template_body TEXT NOT NULL,
+  scheduled_at DATETIME DEFAULT NULL,
+  status ENUM('draft','scheduled','queued','sending','completed','needs_review','cancelled') NOT NULL DEFAULT 'draft',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  started_at DATETIME DEFAULT NULL,
+  completed_at DATETIME DEFAULT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_tenant_campaign (tenant_id,id),
+  INDEX idx_campaign_due (status,scheduled_at,id),
+  INDEX idx_campaign_tenant (tenant_id,account_id,created_at),
+  FOREIGN KEY (tenant_id,account_id) REFERENCES whatsapp_accounts(tenant_id,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE whatsapp_campaign_recipients (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id BIGINT UNSIGNED NOT NULL,
+  account_id BIGINT UNSIGNED NOT NULL,
+  campaign_id BIGINT UNSIGNED NOT NULL,
+  wa_id VARCHAR(32) NOT NULL,
+  status ENUM('pending','queued','accepted','failed','uncertain','excluded') NOT NULL DEFAULT 'pending',
+  job_id BIGINT UNSIGNED DEFAULT NULL,
+  error VARCHAR(1000) DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_campaign_recipient (campaign_id,wa_id),
+  INDEX idx_campaign_recipient_tenant (tenant_id,campaign_id,status),
+  INDEX idx_campaign_recipient_job (job_id),
+  FOREIGN KEY (tenant_id,account_id) REFERENCES whatsapp_accounts(tenant_id,id),
+  FOREIGN KEY (tenant_id,campaign_id) REFERENCES whatsapp_campaigns(tenant_id,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 INSERT INTO whatsapp_plans(slug,title,summary,price_cents,max_numbers,features,is_popular,sort_order) VALUES
  ('essencial','Essencial','Comece a integrar seu WhatsApp com sistemas e automações.',7900,1,JSON_ARRAY('1 número conectado','API REST e webhooks','Envio de templates aprovados','Histórico técnico de eventos'),0,10),
  ('profissional','Profissional','Para operações com múltiplos fluxos e integrações.',19900,3,JSON_ARRAY('Até 3 números','Tudo do Essencial','Múltiplas integrações','Filas e rastreamento de mensagens'),1,20),

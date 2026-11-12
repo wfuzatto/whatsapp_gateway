@@ -128,7 +128,7 @@ final class WhatsAppInstaller {
         if(!is_string($sql))throw new RuntimeException('Esquema SQL indisponível');
         preg_match_all('/CREATE TABLE (?:IF NOT EXISTS )?whatsapp_[a-z_]+\s*\(.*?\) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;/s',
             $sql,$statements);
-        if(count($statements[0])!==14)
+        if(count($statements[0])!==18)
             throw new RuntimeException('Esquema incompatível com o instalador');
         foreach($statements[0] as $statement) {
             $statement=preg_replace('/^CREATE TABLE /','CREATE TABLE IF NOT EXISTS ',$statement,1);

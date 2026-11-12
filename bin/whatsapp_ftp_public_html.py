@@ -90,13 +90,16 @@ def main():
         fail("FTP_PATH deve ser /public_html/; caminho de deploy diferente recusado")
 
     files = [pathlib.Path(".htaccess")]
-    files += sorted(pathlib.Path("public").glob("whatsapp_*.php"))
+    # A página pública e o portal de entrada ficam no FTP atual, sem sobrescrita.
+    files += [f for f in sorted(pathlib.Path("public").glob("whatsapp_*.php"))
+              if f.as_posix() not in {"public/whatsapp_portal.php", "public/whatsapp_home.php"}]
     files += [pathlib.Path("public/.htaccess")]
     files += sorted(pathlib.Path("public/whatsapp_assets").glob("whatsapp_*.svg"))
     files += sorted(pathlib.Path("src").glob("whatsapp_*.php"))
     files += [pathlib.Path("bin/whatsapp_worker.php"),
               pathlib.Path("bin/whatsapp_manage.php"),
               pathlib.Path("database/whatsapp_schema.sql"),
+              pathlib.Path("database/whatsapp_migration_console.sql"),
               pathlib.Path("database/whatsapp_migration_portal.sql"),
               pathlib.Path("database/whatsapp_mobile.sql")]
     if len(files) < 10 or not pathlib.Path("public/whatsapp_index.php").is_file():

@@ -84,7 +84,7 @@ footer{max-width:1180px;margin:0 auto 25px;padding:0 24px;color:#72887d;font-siz
  .zapapi-brand{display:block;width:188px;height:auto;max-height:58px;object-fit:contain}@media(max-width:600px){.zapapi-brand{width:138px}}
 </style></head><body>
 <header><div class="nav"><a class="logo" href="/painel"><img class="zapapi-brand" src="/whatsapp_assets/whatsapp_zapapi_logo.svg" width="188" height="53" alt="ZapApi"></a>
-<div class="navlinks"><a href="/painel">Painel</a><a href="/painel/meta">Integração Meta</a><a href="https://developers.facebook.com/apps/" rel="noreferrer">Meta Developers</a></div>
+<div class="navlinks"><a href="/painel">Painel</a><a href="/painel/conversas">Conversas</a><a href="/painel/contatos">Contatos</a><a href="/painel/templates">Templates</a><a href="/painel/campanhas">Campanhas</a><a href="/painel/meta">Integração Meta</a><a href="https://developers.facebook.com/apps/" rel="noreferrer">Meta Developers</a></div>
 </div></header>
 <main>
 <div class="intro"><div>

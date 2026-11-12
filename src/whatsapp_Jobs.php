@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/whatsapp_bootstrap.php';
 require_once __DIR__ . '/whatsapp_Graph.php';
 require_once __DIR__ . '/whatsapp_Rules.php';
+require_once __DIR__ . '/whatsapp_Campaigns.php';
 
 final class Jobs {
     public static function enqueueSend(array $account, array $payload, string $key): array {
@@ -20,12 +21,15 @@ final class Jobs {
         return ['job_id'=>(int)$job['id'],'status'=>$job['status'],'duplicate'=>!$added];
     }
     public static function claim(): ?array {
+        WhatsAppCampaigns::ensureSchema();
+        WhatsAppCampaigns::dispatchDue();
         $pdo = db();
         // Nao reenviar jobs "processing" cujo worker caiu: entrega pode ja ter acontecido.
         $pdo->exec("UPDATE whatsapp_jobs SET status='uncertain',last_error='Worker stopped after claiming send'
                     WHERE kind='send' AND status='processing' AND locked_at < UTC_TIMESTAMP() - INTERVAL 10 MINUTE");
         $pdo->exec("UPDATE whatsapp_jobs SET status='retry',locked_at=NULL
                     WHERE kind='callback' AND status='processing' AND locked_at < UTC_TIMESTAMP() - INTERVAL 10 MINUTE");
+        WhatsAppCampaigns::reconcileUncertain();
         $pdo->beginTransaction();
         try {
             $s = $pdo->query("SELECT j.* FROM whatsapp_jobs j
@@ -42,6 +46,7 @@ final class Jobs {
                             WHERE id=?")->execute([$job['id']]);
             $pdo->commit();
             $job['attempts'] = (int)$job['attempts']+1;
+            WhatsAppCampaigns::jobClaimed($job);
             return $job;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -106,6 +111,7 @@ final class Jobs {
     private static function finish(array $job,string $state,array $result=[],?string $error=null): void {
         $s = db()->prepare('UPDATE whatsapp_jobs SET status=?,response=?,last_error=?,locked_at=NULL WHERE id=?');
         $s->execute([$state,jsonString($result),$error,$job['id']]);
+        WhatsAppCampaigns::jobFinished($job,$state,$error);
     }
     private static function retry(array $job,string $error): void {
         if ((int)$job['attempts'] >= (int)$job['max_attempts']) {

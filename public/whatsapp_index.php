@@ -9,6 +9,7 @@ require dirname(__DIR__) . '/src/whatsapp_Portal.php';
 require dirname(__DIR__) . '/src/whatsapp_Installer.php';
 require dirname(__DIR__) . '/src/whatsapp_MetaPanel.php';
 require dirname(__DIR__) . '/src/whatsapp_Mobile.php';
+require dirname(__DIR__) . '/src/whatsapp_Console.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -68,6 +69,7 @@ try {
     if (WhatsAppMobile::route($path, $method)) exit;
     if (WhatsAppMetaPanel::route($path, $method)) exit;
     if (WhatsAppInstaller::route($path, $method)) exit;
+    if (WhatsAppConsole::route($path, $method)) exit;
     if (WhatsAppPortal::route($path, $method)) exit;
     if ($method === 'GET' && $path === '/health') response(200,['status'=>'ok','gateway'=>'cloud-api','version'=>'1.0']);
     if ($path === '/webhooks/meta') {
