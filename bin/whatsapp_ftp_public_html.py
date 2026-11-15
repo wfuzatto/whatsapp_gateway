@@ -90,11 +90,13 @@ def main():
         fail("FTP_PATH deve ser /public_html/; caminho de deploy diferente recusado")
 
     files = [pathlib.Path(".htaccess")]
-    # A página pública e o portal de entrada ficam no FTP atual, sem sobrescrita.
+    # O conteúdo da landing não muda; o mesmo portal também serve o painel autenticado.
     files += [f for f in sorted(pathlib.Path("public").glob("whatsapp_*.php"))
-              if f.as_posix() not in {"public/whatsapp_portal.php", "public/whatsapp_home.php"}]
+              if f.as_posix() != "public/whatsapp_home.php"]
     files += [pathlib.Path("public/.htaccess")]
     files += sorted(pathlib.Path("public/whatsapp_assets").glob("whatsapp_*.svg"))
+    files += sorted(pathlib.Path("public/whatsapp_assets").glob("whatsapp_*.css"))
+    files += sorted(pathlib.Path("public/whatsapp_assets").glob("whatsapp_*.js"))
     files += sorted(pathlib.Path("src").glob("whatsapp_*.php"))
     files += [pathlib.Path("bin/whatsapp_worker.php"),
               pathlib.Path("bin/whatsapp_manage.php"),

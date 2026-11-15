@@ -78,7 +78,7 @@ O workflow [WhatsApp - Publicar FTP em public_html](https://github.com/wfuzatto/
 - Usuario e senha: `FTP_USERNAME` e `FTP_PASSWORD` guardados em GitHub Actions Secrets.
 - Antes de substituir um arquivo existente, cria-se backup ZIP fora do diretorio publico em `/whatsapp_gateway_backups/`.
 - Preserva outros arquivos e pastas no servidor; nao apaga nada do site.
-- Envia somente os arquivos de execucao: `.htaccess`, `public/`, `src/`, scripts administrativos `bin/` e esquemas/migrações `database/`. Não sobrescreve `public/whatsapp_portal.php` (landing, login e cadastro) nem `public/whatsapp_home.php`.
+- Envia somente os arquivos de execução: `.htaccess`, `public/`, `src/`, scripts administrativos `bin/` e esquemas/migrações `database/`. O portal também atende `/painel`: o deploy atualiza o dashboard autenticado, enquanto a saída da landing em `/` permanece inalterada. `public/whatsapp_home.php` não é publicado.
 - Confere com download e SHA256 cada arquivo enviado.
 - Se houver `index.php`, `index.html` ou WordPress na raiz, nao sobrescreve um projeto alheio e interrompe o deploy.
 - Importante: os arquivos do PHP ainda exigem um `.env` privado configurado no servidor e o banco `whatsapp_` preparado; publicar arquivos nao configura credenciais nem executa migracoes automaticamente.
@@ -88,7 +88,7 @@ O workflow [WhatsApp - Publicar FTP em public_html](https://github.com/wfuzatto/
 
 ## Página inicial de diagnóstico
 
-A rota `GET /` apresenta a landing page pública em `public/whatsapp_portal.php`; o deploy preserva esse arquivo. O status `GET /health` confirma apenas a disponibilidade do endpoint HTTP/PHP; **não valida** a conexão com MySQL, a API Meta ou a configuração `.env`.
+A rota `GET /` apresenta a landing page pública em `public/whatsapp_portal.php`. O mesmo arquivo atende `/painel`, com uma navegação lateral para a central do cliente; os estilos e atalhos do dashboard só são carregados nessa rota, sem alterar a landing. O status `GET /health` confirma apenas a disponibilidade do endpoint HTTP/PHP; **não valida** a conexão com MySQL, a API Meta ou a configuração `.env`.
 
 ## Portal público, planos e autocadastro
 - `GET /`: landing page comercial responsiva e planos; os valores são **propostas de mensalidade**, não preços oficiais finais.

@@ -6,7 +6,7 @@ function metaE(mixed $v): string {
 }
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store, private');
-header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+header("Content-Security-Policy: default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
 header('X-Robots-Tag: noindex,nofollow');
 $active=($user['subscription_status']??'')==='active';
 $selected=$current??null;
@@ -82,11 +82,11 @@ footer{max-width:1180px;margin:0 auto 25px;padding:0 24px;color:#72887d;font-siz
 @media(max-width:850px){.grid{grid-template-columns:1fr}.span2{grid-column:auto}}
 @media(max-width:600px){main{padding:25px 15px 55px}.box{padding:19px}.intro{display:block}.tag{display:inline-block;margin-top:16px}.twocol{grid-template-columns:1fr}.nav{padding:15px}.navlinks{gap:8px}.navlinks a{font-size:.76rem}}
  .zapapi-brand{display:block;width:188px;height:auto;max-height:58px;object-fit:contain}@media(max-width:600px){.zapapi-brand{width:138px}}
-</style></head><body>
-<header><div class="nav"><a class="logo" href="/painel"><img class="zapapi-brand" src="/whatsapp_assets/whatsapp_zapapi_logo.svg" width="188" height="53" alt="ZapApi"></a>
-<div class="navlinks"><a href="/painel">Painel</a><a href="/painel/conversas">Conversas</a><a href="/painel/contatos">Contatos</a><a href="/painel/templates">Templates</a><a href="/painel/campanhas">Campanhas</a><a href="/painel/meta">Integração Meta</a><a href="https://developers.facebook.com/apps/" rel="noreferrer">Meta Developers</a></div>
-</div></header>
-<main>
+</style><link rel="stylesheet" href="/whatsapp_assets/whatsapp_sidebar.css"><script defer src="/whatsapp_assets/whatsapp_sidebar.js"></script></head><body class="whatsapp-app-mode">
+<div class="whatsapp-app-shell">
+<?php $sidebarPage='meta';$sidebarUser=$user;$sidebarCsrf=$csrf;if(!defined('WHATSAPP_SIDEBAR_VIEW'))define('WHATSAPP_SIDEBAR_VIEW',true);require __DIR__.'/whatsapp_sidebar.php'; ?>
+<div class="whatsapp-app-main"><header class="whatsapp-app-topbar"><button class="whatsapp-sidebar-toggle" type="button" data-sidebar-toggle aria-controls="whatsapp-sidebar" aria-expanded="false" aria-label="Abrir menu">☰</button><span class="topbar-label">Integração com a Meta</span><span class="topbar-tenant"><?=metaE($user['company'])?></span><a class="topbar-link" href="/painel">Visão geral</a></header>
+<main class="whatsapp-app-content">
 <div class="intro"><div>
 <div class="kicker">Configurações do cliente · <?=metaE($user['company'])?></div>
 <h1>Integração com a Meta</h1>
@@ -220,5 +220,5 @@ footer{max-width:1180px;margin:0 auto 25px;padding:0 24px;color:#72887d;font-siz
 </section>
 </div>
 </main>
-<footer>ZapApi · Integração Cloud API oficial da Meta · Os templates ficam sujeitos às políticas e revisão da Meta.</footer>
-</body></html>
+<footer class="whatsapp-app-footer">ZapApi · Integração Cloud API oficial da Meta · Os templates ficam sujeitos às políticas e revisão da Meta.</footer>
+</div></div></body></html>

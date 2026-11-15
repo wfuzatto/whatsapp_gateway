@@ -23,7 +23,9 @@ $pageTitle=match($mode) {
 };
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store, private');
-header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+$contentSecurityPolicy="Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+if($mode==='dashboard')$contentSecurityPolicy="Content-Security-Policy: default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+header($contentSecurityPolicy);
 header('X-Robots-Tag: '.($mode==='landing'?'index, follow':'noindex, nofollow'));
 ?>
 <!DOCTYPE html>
@@ -41,8 +43,14 @@ header('X-Robots-Tag: '.($mode==='landing'?'index, follow':'noindex, nofollow'))
 @media(max-width:650px){.container{width:min(100% - 30px,1170px)}.navline{height:66px}.navlinks{gap:12px}.navlinks .hide-mobile{display:none}.navlinks .btn-sm{padding:9px 12px;font-size:.76rem}.brand{font-size:.94rem}.brandicon{height:30px;width:30px}.hero h1{font-size:2.6rem}.section{padding:70px 0}.cards3,.steps,.dash-grid{grid-template-columns:1fr}.auth-shell{padding:25px 0 65px}.auth-box{padding:24px}.form-grid{grid-template-columns:1fr}.dash-top{flex-direction:column}.showcase{padding:8px}.statrow{gap:5px}.stat{padding:9px 6px}.stat strong{font-size:.98rem}}
  .zapapi-brand{display:block;width:188px;height:auto;max-height:57px;object-fit:contain} .brand{gap:0}@media(max-width:650px){.zapapi-brand{width:142px;max-height:52px}}
 </style>
+<?php if($mode==='dashboard'): ?><link rel="stylesheet" href="/whatsapp_assets/whatsapp_sidebar.css"><script defer src="/whatsapp_assets/whatsapp_sidebar.js"></script><?php endif; ?>
 </head>
-<body>
+<body<?=$mode==='dashboard'?' class="whatsapp-app-mode"':''?>>
+<?php if($mode==='dashboard'&&$user): ?>
+<div class="whatsapp-app-shell">
+<?php $sidebarPage='dashboard';$sidebarUser=$user;$sidebarCsrf=$csrf;if(!defined('WHATSAPP_SIDEBAR_VIEW'))define('WHATSAPP_SIDEBAR_VIEW',true);require __DIR__.'/whatsapp_sidebar.php'; ?>
+<div class="whatsapp-app-main"><header class="whatsapp-app-topbar"><button class="whatsapp-sidebar-toggle" type="button" data-sidebar-toggle aria-controls="whatsapp-sidebar" aria-expanded="false" aria-label="Abrir menu">☰</button><span class="topbar-label">Visão geral da empresa</span><span class="topbar-tenant"><?=whatsappE($user['company'])?></span><a class="topbar-link" href="/painel/conversas">Central de conversas</a></header>
+<?php endif; ?>
 <header class="navbar">
   <div class="container navline">
     <a href="/" class="brand" aria-label="ZapApi — página inicial"><img class="zapapi-brand" src="/whatsapp_assets/whatsapp_zapapi_logo.svg" width="188" height="53" alt="ZapApi"></a>
@@ -60,7 +68,7 @@ header('X-Robots-Tag: '.($mode==='landing'?'index, follow':'noindex, nofollow'))
     </nav>
   </div>
 </header>
-<main>
+<main<?=$mode==='dashboard'?' class="whatsapp-app-content"':''?>>
 <?php if ($mode==='landing'): ?>
 <section class="hero">
  <div class="container hero-inner">
@@ -216,11 +224,11 @@ header('X-Robots-Tag: '.($mode==='landing'?'index, follow':'noindex, nofollow'))
  <article class="dash-panel" style="border-color:#a8dfc7;background:#f8fffa">
   <h2>Integração com a Meta</h2>
   <p style="color:#587568">Configure seu número oficial, WABA e token de acesso. Envie templates para aprovação, acompanhe o status e gere chaves de API exclusivas para sua empresa.</p>
-  <a href="/painel/meta" class="btn btn-dark">Configurar WhatsApp e templates →</a>
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><a href="/painel/meta" class="btn btn-dark">Configurar WhatsApp e templates →</a><a href="/painel/conversas" class="btn btn-outline">Abrir central de conversas →</a></div>
  </article>
  <article class="dash-panel"><h2>Próximas etapas</h2>
-  <ol class="steps-list"><li>Confirme o plano e a ativação comercial.</li><li>Prepare o WABA e o número de telefone na Meta.</li><li>Associe suas credenciais oficiais ao tenant.</li><li>Configure webhooks e integre seu sistema à API.</li></ol>
-  <p style="font-size:.85rem;color:#678176;margin-top:19px">A integração de pagamento e a administração visual de números ainda estão em desenvolvimento; o painel inicial não permite pagamentos nem disparos.</p>
+  <ol class="steps-list"><li>Conecte seu número e acompanhe os templates na Integração Meta.</li><li>Registre contatos e a origem do consentimento.</li><li>Atenda pela Central de conversas e inicie conversas com templates aprovados.</li><li>Prepare campanhas para contatos autorizados e acompanhe os resultados.</li></ol>
+  <p style="font-size:.85rem;color:#678176;margin-top:19px">Os envios respeitam a janela de atendimento, o consentimento e as aprovações da Meta. Campanhas agendadas dependem do worker do gateway.</p>
  </article>
 </div></section>
 <?php else: ?>
@@ -232,5 +240,6 @@ header('X-Robots-Tag: '.($mode==='landing'?'index, follow':'noindex, nofollow'))
  <div><a href="/#planos">Planos</a> &nbsp;·&nbsp; <a href="/entrar">Acesso</a> &nbsp;·&nbsp; <a href="/politicas/">Privacidade</a> &nbsp;·&nbsp; <a href="/termos/">Termos</a> &nbsp;·&nbsp; <a href="/exclusao/">Exclusão de dados</a></div>
  <div>Software independente, não afiliado à Meta.</div>
 </div></footer>
+<?php if($mode==='dashboard'&&$user): ?></div></div><?php endif; ?>
 </body>
 </html>
