@@ -43,13 +43,14 @@ header('X-Robots-Tag: noindex, nofollow');
 <?php if($flash): ?><div class="notice <?=($flash['type']??'')==='error'?'bad':'ok'?>" role="status"><?=consoleE($flash['message']??'')?></div><?php endif; ?>
 <?php if($error): ?><div class="notice bad" role="alert"><?=consoleE($error)?></div><?php endif; ?>
 <?php if($data['template_error']??null): ?><div class="notice warn" role="status"><?=consoleE($data['template_error'])?> <a href="/painel/meta">Ver configuração Meta</a></div><?php endif; ?>
+<?php if($page==='inbox'): ?><div id="live-feedback" class="notice" role="status" aria-live="polite" hidden></div><?php endif; ?>
 
 <?php if($page==='inbox'): ?>
 <div class="toolbar accountbar"><form method="get" action="/painel/conversas"><label for="account-filter">Conexão</label><select id="account-filter" name="account_id" onchange="this.form.submit()"><?php foreach($accounts as $a): ?><option value="<?=(int)$a['id']?>" <?=(int)$a['id']===$accountId?'selected':''?>><?=consoleE($a['name'])?> · <?=consoleE($a['phone_number_id'])?><?=($a['status']??'')==='active'?'':' · suspensa'?></option><?php endforeach; ?></select><?php if($waId): ?><input type="hidden" name="wa_id" value="<?=consoleE($waId)?>"><?php endif; ?></form><span class="mobile-note">Até 100 mensagens por conversa</span></div>
 <?php if(!$accounts): ?><section class="panel empty"><b>Conecte um número para começar</b><p>Adicione uma integração Meta do próprio tenant para receber mensagens.</p><a class="btn" href="/painel/meta">Configurar conexão Meta →</a></section>
 <?php else: ?><section class="panel inbox"><aside class="convlist"><div class="convtools"><form method="get" action="/painel/conversas"><input type="hidden" name="account_id" value="<?=$accountId?>"><input type="search" name="q" value="<?=consoleE($data['search']??'')?>" placeholder="Buscar nome ou número" aria-label="Buscar conversa"><button class="btn secondary" type="submit">Buscar</button></form><div class="filters"><a class="<?=$filter==='all'?'active':''?>" href="/painel/conversas?account_id=<?=$accountId?>">Todas</a><a class="<?=$filter==='open'?'active':''?>" href="/painel/conversas?account_id=<?=$accountId?>&status=open">Abertas</a><a class="<?=$filter==='closed'?'active':''?>" href="/painel/conversas?account_id=<?=$accountId?>&status=closed">Encerradas</a></div></div>
 <div class="convrows"><?php foreach(($data['conversations']??[]) as $row): $rowWa=(string)$row['wa_id'];$isClosed=($row['conversation_status']??'')==='closed';if($isClosed&&!empty($row['closed_at'])&&!empty($row['last_inbound_at']))$isClosed=strtotime($row['last_inbound_at'].' UTC')<=strtotime($row['closed_at'].' UTC');$label=(string)($row['display_name']?:$rowWa); ?>
-<a class="convrow <?=$waId===$rowWa?'selected':''?>" href="/painel/conversas?account_id=<?=$accountId?>&wa_id=<?=rawurlencode($rowWa)?>"><span class="avatar"><?=consoleE(consoleInitial($label))?></span><span class="convmain"><b><?=consoleE($label)?></b><p><?=consoleE($row['preview'])?></p></span><span class="convmeta"><?=consoleE(consoleTime($row['created_at'],'H:i'))?><br><?=$isClosed?'Encerrada':'Aberta'?></span></a>
+<a class="convrow <?=$waId===$rowWa?'selected':''?>" data-message-id="<?=(int)$row['message_id']?>" href="/painel/conversas?account_id=<?=$accountId?>&wa_id=<?=rawurlencode($rowWa)?>"><span class="avatar"><?=consoleE(consoleInitial($label))?></span><span class="convmain"><b><?=consoleE($label)?></b><p><?=consoleE($row['preview'])?></p></span><span class="convmeta"><?=consoleE(consoleTime($row['created_at'],'H:i'))?><br><?=$isClosed?'Encerrada':'Aberta'?></span></a>
 <?php endforeach; ?><?php if(empty($data['conversations'])): ?><div class="empty"><b>Nenhuma conversa ainda</b>Quando alguém enviar mensagem, a conversa aparece aqui.</div><?php endif; ?></div></aside>
 <section class="chat"><?php if($contact): ?><div class="chathead"><div class="chatname"><span class="avatar"><?=consoleE(consoleInitial((string)($contact['display_name']?:$waId)))?></span><div><b><?=consoleE($contact['display_name']?:$waId)?></b><small><?=consoleE($waId)?> · <?=consoleE($selectedAccount['name']??'WhatsApp')?></small></div></div>
 <form method="post" action="/painel/conversas"><input type="hidden" name="csrf" value="<?=consoleE($data['csrf'])?>"><input type="hidden" name="action" value="set_conversation_status"><input type="hidden" name="account_id" value="<?=$accountId?>"><input type="hidden" name="wa_id" value="<?=consoleE($waId)?>"><input type="hidden" name="status" value="<?=($data['conversation_state']['status']??'open')==='closed'?'open':'closed'?>"><button class="btn secondary" type="submit"><?=($data['conversation_state']['status']??'open')==='closed'?'Reabrir':'Encerrar'?></button></form></div>
@@ -118,8 +119,71 @@ header('X-Robots-Tag: noindex, nofollow');
 <?php endif; ?>
 </main><footer style="text-align:center;color:#728279;font-size:.76rem;padding:0 12px 24px">ZapApi · API oficial WhatsApp Cloud · Dados isolados por empresa</footer></div></div>
 <?php if($page==='inbox'): ?><script>
-document.querySelectorAll('[data-quick-reply]').forEach(function(select){select.addEventListener('change',function(){if(this.value){var field=document.querySelector('.composer textarea');if(field){field.value=this.value;field.focus();}}});});
-var stream=document.getElementById('message-stream');if(stream)stream.scrollTop=stream.scrollHeight;
+(function(){
+  var rowsBox=document.querySelector('.convrows'),stream=document.getElementById('message-stream');
+  var accountSelect=document.getElementById('account-filter'),feedback=document.getElementById('live-feedback');
+  if(!rowsBox)return;
+  var params=new URLSearchParams(window.location.search),accountId=accountSelect?accountSelect.value:(params.get('account_id')||''),selectedWa=params.get('wa_id')||'';
+  var seenMessages=new Set(Array.from(rowsBox.querySelectorAll('[data-message-id]')).map(function(row){return row.dataset.messageId;}));
+  var conversationSignature='',messageSignature='',refreshing=false,sending=false;
+  function node(tag,className,text){var item=document.createElement(tag);if(className)item.className=className;if(text!==undefined)item.textContent=text;return item;}
+  function urlFor(waId){var url=new URL('/painel/conversas',window.location.origin);url.searchParams.set('account_id',accountId);if(waId)url.searchParams.set('wa_id',waId);if(params.get('q'))url.searchParams.set('q',params.get('q'));if(params.get('status'))url.searchParams.set('status',params.get('status'));return url.toString();}
+  function showFeedback(message,type){if(!feedback)return;feedback.hidden=!message;feedback.className='notice '+(type||'ok');feedback.textContent=message||'';}
+  function renderConversations(rows){
+    var fragment=document.createDocumentFragment();
+    if(!rows.length){var empty=node('div','empty');empty.appendChild(node('b','', 'Nenhuma conversa ainda'));empty.appendChild(document.createTextNode('Quando alguém enviar mensagem, a conversa aparece aqui.'));fragment.appendChild(empty);}
+    rows.forEach(function(row){var label=row.display_name||row.wa_id,a=node('a','convrow'+(selectedWa===row.wa_id?' selected':''));a.href=urlFor(row.wa_id);a.dataset.messageId=row.message_id;
+      a.appendChild(node('span','avatar',Array.from(label)[0].toLocaleUpperCase('pt-BR')));
+      var main=node('span','convmain');main.appendChild(node('b','',label));main.appendChild(node('p','',row.preview));a.appendChild(main);
+      var meta=node('span','convmeta');meta.appendChild(document.createTextNode(row.time_label));meta.appendChild(document.createElement('br'));meta.appendChild(document.createTextNode(row.closed?'Encerrada':'Aberta'));a.appendChild(meta);fragment.appendChild(a);
+    });
+    rowsBox.replaceChildren(fragment);
+  }
+  function renderMessages(messages){
+    if(!stream)return;
+    var nearBottom=stream.scrollHeight-stream.scrollTop-stream.clientHeight<90,fragment=document.createDocumentFragment();
+    var statusNames={accepted:'Enviada à Meta',sent:'Enviada',delivered:'Entregue',read:'Lida',failed:'Falhou',received:'Recebida'};
+    var mediaNames={image:'imagem',video:'vídeo',audio:'áudio',document:'documento',sticker:'figurinha'};
+    if(!messages.length){var empty=node('div','empty');empty.appendChild(node('b','', 'Sem mensagens'));empty.appendChild(document.createTextNode('Envie um template aprovado para iniciar.'));fragment.appendChild(empty);}
+    messages.forEach(function(message){var bubble=node('article','bubble'+(message.direction==='outbound'?' out':''));
+      if(message.media_id){var mediaUrl=new URL('/painel/midia',window.location.origin);mediaUrl.searchParams.set('account_id',accountId);mediaUrl.searchParams.set('wa_id',selectedWa);mediaUrl.searchParams.set('id',message.media_id);var link=node('a','', 'Abrir '+(mediaNames[message.message_type]||'anexo'));link.href=mediaUrl.toString();link.target='_blank';link.rel='noreferrer';bubble.appendChild(link);if(message.caption){var caption=node('div','',message.caption);caption.style.whiteSpace='pre-wrap';bubble.appendChild(caption);}}
+      else {var body=node('div','',message.text);body.style.whiteSpace='pre-wrap';bubble.appendChild(body);}
+      bubble.appendChild(node('time','',(message.time_label||'')+' · '+(statusNames[message.status]||message.status)));fragment.appendChild(bubble);
+    });
+    stream.replaceChildren(fragment);if(nearBottom||!stream.dataset.initialized)stream.scrollTop=stream.scrollHeight;stream.dataset.initialized='1';
+  }
+  async function refresh(){
+    if(refreshing||sending||document.visibilityState==='hidden')return;refreshing=true;
+    try{
+      var url=new URL('/painel/conversas/atualizacoes',window.location.origin);url.searchParams.set('account_id',accountId);if(selectedWa)url.searchParams.set('wa_id',selectedWa);if(params.get('q'))url.searchParams.set('q',params.get('q'));if(params.get('status'))url.searchParams.set('status',params.get('status'));
+      var response=await fetch(url.toString(),{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
+      if(new URL(response.url).pathname==='/entrar'){window.location.assign(response.url);return;}
+      if(!response.ok)throw new Error('HTTP '+response.status);
+      var data=await response.json();
+      if(!selectedWa){var incoming=data.conversations.find(function(row){return row.direction==='inbound'&&!seenMessages.has(row.message_id);});if(incoming){window.location.assign(urlFor(incoming.wa_id));return;}}
+      data.conversations.forEach(function(row){seenMessages.add(row.message_id);});
+      var nextConversations=JSON.stringify(data.conversations);if(nextConversations!==conversationSignature){renderConversations(data.conversations);conversationSignature=nextConversations;}
+      if(selectedWa&&data.selected_wa_id===selectedWa&&data.contact&&stream){var nextMessages=JSON.stringify(data.messages);if(nextMessages!==messageSignature){renderMessages(data.messages);messageSignature=nextMessages;}}
+    }catch(error){console.warn('Atualização automática da conversa falhou.',error);}
+    finally{refreshing=false;}
+  }
+  document.querySelectorAll('[data-quick-reply]').forEach(function(select){select.addEventListener('change',function(){if(this.value){var field=document.querySelector('.composer textarea');if(field){field.value=this.value;field.focus();}}});});
+  if(stream)stream.scrollTop=stream.scrollHeight;
+  var composer=document.querySelector('.composer');
+  if(composer)composer.addEventListener('submit',async function(event){
+    event.preventDefault();if(sending)return;sending=true;var button=composer.querySelector('button[type="submit"]'),original=button?button.textContent:'Enviar →';if(button){button.disabled=true;button.textContent='Enviando…';}showFeedback('Enviando mensagem à Meta…','ok');
+    try{
+      var response=await fetch(composer.action,{method:'POST',body:new FormData(composer),credentials:'same-origin',cache:'no-store',headers:{'X-Requested-With':'XMLHttpRequest'}}),html=await response.text();
+      if(new URL(response.url).pathname==='/entrar'){window.location.assign(response.url);return;}
+      if(!response.ok){var parsed=new DOMParser().parseFromString(html,'text/html'),alert=parsed.querySelector('[role="alert"]');throw new Error(alert?alert.textContent.trim():'Não foi possível confirmar o envio.');}
+      var parsedSuccess=new DOMParser().parseFromString(html,'text/html'),sendError=parsedSuccess.querySelector('[role="alert"]');if(sendError)throw new Error(sendError.textContent.trim());
+      var textarea=composer.querySelector('textarea'),file=composer.querySelector('input[type="file"]');if(textarea)textarea.value='';if(file)file.value='';showFeedback('Mensagem enviada à Meta. O status de entrega será atualizado automaticamente.','ok');
+      await refresh();
+    }catch(error){showFeedback(error.message||'Não foi possível enviar a mensagem. Confira o chat antes de tentar novamente.','bad');await refresh();}
+    finally{sending=false;if(button){button.disabled=false;button.textContent=original;}refresh();}
+  });
+  refresh();setInterval(refresh,2000);document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')refresh();});
+})();
 </script><?php endif; ?>
 <?php if($page==='new'): ?><script>
 (function(){var select=document.getElementById('template-choice'),box=document.getElementById('template-parameters'),lang=document.getElementById('template-language');if(!select)return;function render(){var op=select.options[select.selectedIndex];if(!op)return;lang.value=op.dataset.language||'';var header=Number(op.dataset.headerVars||0),body=Number(op.dataset.bodyVars||0);box.replaceChildren();box.hidden=!(header||body);function group(type,count,label){if(!count)return;var h=document.createElement('h3');h.textContent=label;box.appendChild(h);for(var i=1;i<=count;i++){var wrap=document.createElement('div');wrap.className='field';var l=document.createElement('label');var id=type+'-'+i;l.htmlFor=id;l.textContent='Variável {{'+i+'}}';var input=document.createElement('input');input.id=id;input.name=type+'_params[]';input.required=true;input.maxLength=1024;input.placeholder='Valor para o contato';wrap.appendChild(l);wrap.appendChild(input);box.appendChild(wrap);}}group('header',header,'Cabeçalho');group('body',body,'Mensagem');}select.addEventListener('change',render);render();})();
