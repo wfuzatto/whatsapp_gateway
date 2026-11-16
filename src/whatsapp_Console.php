@@ -211,6 +211,80 @@ final class WhatsAppConsole {
         }
         return $state;
     }
+    private static function liveTime(?string $value,string $format='d/m/Y H:i'): string {
+        if(!$value)return '—';
+        try {
+            $tz=new DateTimeZone(config('APP_TIMEZONE','America/Sao_Paulo'));
+            return (new DateTimeImmutable($value,new DateTimeZone('UTC')))->setTimezone($tz)->format($format);
+        } catch(Throwable $e) { return $value; }
+    }
+    private static function liveUpdates(array $user): never {
+        $tenantId=(int)$user['tenant_id'];
+        $accountId=(int)self::field($_GET,'account_id',20);
+        $accounts=self::accounts($tenantId);
+        if(!$accountId&&$accounts)$accountId=(int)$accounts[0]['id'];
+        if($accountId)self::account($tenantId,$accountId);
+        $search=self::field($_GET,'q',100);
+        $filter=(string)($_GET['status']??'all');
+        if(!in_array($filter,['all','open','closed'],true))$filter='all';
+        $conversations=self::listConversations($tenantId,$accountId,$search,$filter);
+        $items=[];
+        foreach($conversations as $row) {
+            $closed=($row['conversation_status']??'')==='closed';
+            if($closed&&!empty($row['last_inbound_at'])&&!empty($row['closed_at']))
+                $closed=strtotime($row['last_inbound_at'].' UTC')<=strtotime($row['closed_at'].' UTC');
+            $items[]=[
+                'wa_id'=>(string)$row['wa_id'],
+                'display_name'=>(string)($row['display_name']??''),
+                'preview'=>(string)$row['preview'],
+                'time_label'=>self::liveTime((string)$row['created_at'],'H:i'),
+                'closed'=>$closed,
+                'message_id'=>(string)$row['message_id'],
+                'direction'=>(string)$row['direction'],
+            ];
+        }
+        $waId=self::field($_GET,'wa_id',32);$contact=null;$messages=[];
+        $state=['status'=>'open','closed_at'=>null];$windowOpen=false;
+        if($waId!==''&&$accountId) {
+            if(!validPhone($waId))throw new HttpError('Número de conversa inválido.',422);
+            $s=db()->prepare('SELECT wa_id,display_name,last_inbound_at FROM whatsapp_contacts WHERE tenant_id=? AND account_id=? AND wa_id=? LIMIT 1');
+            $s->execute([$tenantId,$accountId,$waId]);$contact=$s->fetch()?:null;
+            if($contact) {
+                $state=self::conversationsState($tenantId,$accountId,$waId);
+                $windowOpen=!empty($contact['last_inbound_at'])&&strtotime($contact['last_inbound_at'].' UTC')>=time()-86400;
+                foreach(self::messages($tenantId,$accountId,$waId) as $message) {
+                    $messages[]=[
+                        'id'=>(string)$message['id'],
+                        'direction'=>(string)$message['direction'],
+                        'message_type'=>(string)$message['message_type'],
+                        'status'=>(string)$message['status'],
+                        'text'=>(string)$message['text'],
+                        'media_id'=>$message['media_id'],
+                        'caption'=>(string)$message['caption'],
+                        'time_label'=>self::liveTime((string)$message['created_at']),
+                    ];
+                }
+            }
+        }
+        $accountName='WhatsApp';
+        foreach($accounts as $account)if((int)$account['id']===$accountId){$accountName=(string)$account['name'];break;}
+        response(200,[
+            'account_id'=>$accountId,'account_name'=>$accountName,
+            'selected_wa_id'=>$waId,'contact'=>$contact?['wa_id'=>(string)$contact['wa_id'],'display_name'=>(string)($contact['display_name']??'')]:null,
+            'conversation_status'=>(string)($state['status']??'open'),'window_open'=>$windowOpen,
+            'conversations'=>$items,'messages'=>$messages,
+        ]);
+    }
+    private static function metaFailureMessage(MetaFailure $e): string {
+        if($e->transportUncertain)
+            return 'A conexão com a Meta caiu antes da confirmação. A mensagem pode ter sido aceita; confira o chat antes de tentar enviar novamente.';
+        $error=is_array($e->metaBody['error']??null)?$e->metaBody['error']:[];
+        if((int)($error['code']??0)===190)
+            return 'A Meta recusou o envio porque o token de acesso está inválido ou expirou. Atualize o token em Integração Meta e tente novamente.';
+        $detail=$error['error_user_msg']??$error['message']??null;
+        if(is_string($detail)&&trim($detail)!=='')return 'A Meta recusou a solicitação: '.substr(trim($detail),0,700);
+        return 'A Meta recusou a solicitação (HTTP '.$e->upstreamStatus.'). Confira o token, as permissões e o número em Integração Meta.';
+    }
     private static function render(array $user,string $page,array $vars=[]): void {
         WhatsAppCampaigns::ensureSchema();
         $tenantId=(int)$user['tenant_id'];$data=$vars;
@@ -482,6 +556,16 @@ final class WhatsAppConsole {
     }
 
     public static function route(string $path,string $method): bool {
+        if($path==='/painel/conversas/atualizacoes') {
+            try {
+                if($method!=='GET')throw new HttpError('Método não permitido.',405);
+                $user=self::user();self::liveUpdates($user);
+            } catch(HttpError $e) { response($e->httpStatus,['error'=>$e->getMessage()]); }
+            catch(Throwable $e) {
+                error_log('WhatsApp live updates error: '.get_class($e));
+                response(503,['error'=>'Atualização da conversa indisponível.']);
+            }
+        }
         $pages=['/painel/conversas'=>'inbox','/painel/conversas/nova'=>'new','/painel/contatos'=>'contacts',
             '/painel/templates'=>'templates','/painel/campanhas'=>'campaigns','/painel/respostas-rapidas'=>'quick_replies'];
         if($path==='/painel/midia') {
@@ -520,8 +604,9 @@ final class WhatsAppConsole {
             return true;
         } catch(MetaFailure $e) {
             http_response_code(502);
-            try {self::render($user??self::user(),$page,['error'=>'A Meta não respondeu. Nenhuma confirmação de envio foi recebida.','old'=>$_POST]);}
-            catch(Throwable $ignored){header('Content-Type: text/plain; charset=utf-8');echo 'A Meta não respondeu.';}
+            $message=self::metaFailureMessage($e);
+            try {self::render($user??self::user(),$page,['error'=>$message,'old'=>$_POST]);}
+            catch(Throwable $ignored){header('Content-Type: text/plain; charset=utf-8');echo $message;}
             return true;
         } catch(Throwable $e) {
             error_log('WhatsApp console error: '.get_class($e));http_response_code(503);
