@@ -81,7 +81,13 @@ code="$(curl -sS -o /dev/null -w '%{http_code}' -b "$tmp/cookie" -c "$tmp/cookie
 curl -fsS -b "$tmp/cookie" "$host/admin" -o "$tmp/again.html"
 grep -q 'Superadministração' "$tmp/again.html"
 echo "OK: login do superadmin com senha protegida"
-curl -fsS -b "$tmp/cookie" "$host/admin/meta" -o "$tmp/meta.html"
+code="$(curl -sS -o "$tmp/meta.html" -w '%{http_code}' -b "$tmp/cookie" "$host/admin/meta")"
+if [[ "$code" != "200" ]]; then
+ echo "Falha ao abrir a configuração Meta: HTTP $code"
+ cat "$tmp/meta.html"
+ tail -35 "$tmp/http.log" || true
+ exit 1
+fi
 grep -q 'Credenciais do aplicativo Meta' "$tmp/meta.html"
 grep -q 'Meta App ID' "$tmp/meta.html"
 grep -q 'App Secret' "$tmp/meta.html"
