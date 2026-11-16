@@ -20,6 +20,7 @@ final class WhatsAppInstaller {
             'lock'=>'whatsapp_install_done.txt',
             'mutex'=>'whatsapp_install_mutex.lock',
             'env'=>'.env',
+            'env_mutex'=>'whatsapp_meta_env_mutex.lock',
             default=>throw new RuntimeException('Caminho inválido')
         };
         if(config('APP_ENV')==='test') {
@@ -67,6 +68,85 @@ final class WhatsAppInstaller {
         if(!is_string($value))throw new HttpError('Dados inválidos.',422);
         return trim($value);
     }
+    private static function metaConfiguration(): array {
+        return [
+            'app_id'=>config('META_APP_ID'),
+            'app_secret_configured'=>config('META_APP_SECRET')!=='',
+            'verify_token'=>config('META_VERIFY_TOKEN'),
+            'callback_url'=>'https://zapapi.inf.br/webhooks/meta',
+            'graph_version'=>config('GRAPH_VERSION','v26.0')
+        ];
+    }
+    private static function updatePrivateEnv(array $updates): void {
+        $path=self::path('env');
+        if(is_link($path)||!is_file($path)||!is_readable($path)||!is_writable($path))
+            throw new HttpError('O arquivo .env privado não está acessível para atualização.',503);
+        $mutex=fopen(self::path('env_mutex'),'c');
+        if($mutex===false||!flock($mutex,LOCK_EX))
+            throw new HttpError('Não foi possível bloquear a configuração Meta.',503);
+        $temporary='';
+        try {
+            $contents=file_get_contents($path);
+            if(!is_string($contents))throw new HttpError('Não foi possível ler a configuração privada.',503);
+            $lines=preg_split('/\r\n|\n|\r/',rtrim($contents,"\r\n"));
+            if(!is_array($lines))$lines=[];
+            $written=[];
+            foreach($lines as &$line) {
+                if(!preg_match('/^([A-Z_][A-Z0-9_]*)=(.*)$/D',$line,$match))continue;
+                $key=$match[1];
+                if(array_key_exists($key,$updates)) {
+                    $line=$key.'='.$updates[$key];
+                    $written[$key]=true;
+                }
+            }
+            unset($line);
+            foreach($updates as $key=>$value)
+                if(!isset($written[$key]))$lines[]=$key.'='.$value;
+            $next=implode("\n",$lines)."\n";
+            $temporary=$path.'.tmp.'.bin2hex(random_bytes(8));
+            $handle=fopen($temporary,'xb');
+            if($handle===false)throw new HttpError('Não foi possível preparar a configuração Meta.',503);
+            try {
+                @chmod($temporary,0600);
+                if(fwrite($handle,$next)!==strlen($next))
+                    throw new HttpError('Não foi possível gravar a configuração Meta.',503);
+                fflush($handle);
+                if(function_exists('fsync'))@fsync($handle);
+            } finally { fclose($handle); }
+            if(!rename($temporary,$path))
+                throw new HttpError('Não foi possível substituir o arquivo .env privado.',503);
+            $temporary='';
+            @chmod($path,0600);
+            foreach($updates as $key=>$value)putenv($key.'='.$value);
+        } finally {
+            if($temporary!==''&&is_file($temporary))@unlink($temporary);
+            flock($mutex,LOCK_UN);
+            fclose($mutex);
+        }
+    }
+    private static function saveMetaConfiguration(array $post): never {
+        self::csrfCheck($post);
+        if(!self::currentAdmin())throw new HttpError('Acesso negado.',403);
+        $appId=self::input($post,'meta_app_id');
+        $appSecret=self::input($post,'meta_app_secret');
+        $verifyToken=self::input($post,'meta_verify_token');
+        if(!preg_match('/^[0-9]{1,40}$/D',$appId))
+            throw new HttpError('Informe um Meta App ID numérico válido.',422);
+        if($appSecret!==''&&!preg_match('/^[A-Fa-f0-9]{32}$/D',$appSecret))
+            throw new HttpError('O App Secret deve conter os 32 caracteres hexadecimais fornecidos pela Meta.',422);
+        if($appSecret===''&&config('META_APP_SECRET')==='')
+            throw new HttpError('Informe o App Secret para habilitar a validação das assinaturas do webhook.',422);
+        if(strlen($verifyToken)<8||strlen($verifyToken)>128||
+            !preg_match('/^[A-Za-z0-9._*~-]+$/D',$verifyToken))
+            throw new HttpError('Informe o token de verificação (8 a 128 caracteres seguros).',422);
+        if($appSecret==='')$appSecret=config('META_APP_SECRET');
+        self::updatePrivateEnv([
+            'META_APP_ID'=>$appId,
+            'META_APP_SECRET'=>$appSecret,
+            'META_VERIFY_TOKEN'=>$verifyToken
+        ]);
+        self::redirect('/admin/meta?saved=1');
+    }
     private static function redirect(string $path): never {
         header('Location: '.$path,true,303);exit;
     }
@@ -103,6 +183,7 @@ final class WhatsAppInstaller {
             'DB_USER='.$user,
             'DB_PASSWORD='.$password,
             'MASTER_KEY_BASE64='.base64_encode(random_bytes(32)),
+            'META_APP_ID=',
             'META_APP_SECRET=',
             'META_VERIFY_TOKEN='.bin2hex(random_bytes(24)),
             'MAX_BODY_BYTES=4194304',
@@ -270,7 +351,7 @@ final class WhatsAppInstaller {
         return ['subscriptions'=>$subs,'counts'=>$counts];
     }
     public static function route(string $path,string $method): bool {
-        if(!in_array($path,['/install','/admin','/admin/entrar','/admin/sair','/admin/assinatura'],true))
+        if(!in_array($path,['/install','/admin','/admin/entrar','/admin/sair','/admin/assinatura','/admin/meta'],true))
             return false;
         WhatsAppPortal::csrf();
         try {
@@ -299,15 +380,27 @@ final class WhatsAppInstaller {
                 self::redirect('/admin/entrar');
             }
             if($path==='/admin/assinatura' && $method==='POST')self::action($_POST);
-            if($method!=='GET')throw new HttpError('Método não permitido.',405);
             $admin=self::currentAdmin();
             if(!$admin)self::redirect('/admin/entrar');
+            if($path==='/admin/meta') {
+                if($method==='POST')self::saveMetaConfiguration($_POST);
+                if($method!=='GET')throw new HttpError('Método não permitido.',405);
+                self::render('meta-settings',[ 'admin'=>$admin,'meta'=>self::metaConfiguration(),
+                    'saved'=>($_GET['saved']??'')==='1' ]);
+                return true;
+            }
+            if($method!=='GET')throw new HttpError('Método não permitido.',405);
             self::render('dashboard',['admin'=>$admin,'stats'=>self::dashboard()]);
             return true;
         } catch(HttpError $e) {
             http_response_code($e->httpStatus);
-            $fallback=$path==='/install'?'install':($path==='/admin/entrar'?'login':'error');
-            self::render($fallback,['error'=>$e->getMessage()]);
+            $fallback=$path==='/install'?'install':($path==='/admin/entrar'?'login':($path==='/admin/meta'?'meta-settings':'error'));
+            $data=['error'=>$e->getMessage()];
+            if($fallback==='meta-settings') {
+                $data['admin']=self::currentAdmin();
+                $data['meta']=self::metaConfiguration();
+            }
+            self::render($fallback,$data);
             return true;
         } catch(Throwable $e) {
             error_log('WhatsApp installer/admin: '.get_class($e));

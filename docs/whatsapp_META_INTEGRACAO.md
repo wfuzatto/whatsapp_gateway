@@ -20,7 +20,9 @@
 ## Webhook
 A URL publicada é `https://zapapi.inf.br/webhooks/meta`.
 
-**Importante:** no estágio atual o receptor de webhooks usa um **App Secret e Verify Token globais** no arquivo privado `.env`. Eles são controlados pelo operador da plataforma, não fornecidos a clientes individualmente. Se o cliente utilizar um aplicativo Meta de propriedade própria, o webhook exige desenvolvimento adicional de segredo e validação específicos por app; não basta preencher a URL.
+O superadministrador configura Meta App ID, App Secret e Verify Token em `/admin/meta`. Os valores são gravados no `.env` privado, acima de `public_html`; o App Secret não é reexibido. O App Secret valida a assinatura SHA-256 dos eventos POST. O Verify Token valida o desafio GET da Meta e precisa ser copiado exatamente para o painel de Webhooks. A instalação gera um token aleatório inicial, que pode ser substituído nessa tela.
+
+O App ID, App Secret, Verify Token e callback pertencem ao aplicativo compartilhado da plataforma, não a cada cliente. WABA ID, Phone Number ID e token de acesso permanecem por número/tenant na tela `/painel/meta`. A API Cloud usa o Phone Number ID e o token de acesso para envio; o App ID identifica o app Meta e não substitui esses IDs. O Embedded Signup continua fora do escopo desta versão.
 
 No app Meta proprietário da integração, configurar/validar o callback e assinar `messages`, `message_template_status_update`, `message_template_quality_update` e `template_category_update` (quando disponíveis). O painel pode solicitar `POST /{WABA_ID}/subscribed_apps`; isto **não garante** que um aplicativo não autorizado será inscrito automaticamente.
 

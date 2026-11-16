@@ -110,7 +110,7 @@ footer{max-width:1180px;margin:0 auto 25px;padding:0 24px;color:#72887d;font-siz
 <label>WhatsApp Business Account ID (WABA) <input name="waba_id" required inputmode="numeric" pattern="[0-9]+" maxlength="40" placeholder="Ex.: 123456789012345"></label>
 <label>Phone Number ID <input name="phone_number_id" required inputmode="numeric" pattern="[0-9]+" maxlength="40" placeholder="Ex.: 987654321098765"></label>
 </div>
-<label>Token de acesso da Meta <input type="password" name="access_token" required minlength="30" maxlength="4096" autocomplete="off" placeholder="Cole o token de usuário de sistema"><small>Permissões necessárias: whatsapp_business_management e whatsapp_business_messaging. Nunca exibiremos o token após salvar. Para rotacioná-lo, use os mesmos IDs e informe o token novo.</small></label>
+<label>Token de acesso de longa duração da Meta <input type="password" name="access_token" required minlength="30" maxlength="4096" autocomplete="off" placeholder="Cole o token de usuário de sistema"><small>Use o token permanente do usuário de sistema, com permissões whatsapp_business_management e whatsapp_business_messaging. Nunca exibiremos o token após salvar. Para rotacioná-lo, use os mesmos IDs e informe o token novo.</small></label>
 <button type="submit" class="btn" <?=$active?'':'disabled'?>>Validar e salvar integração</button>
 </form>
 <div class="notice warn" style="margin-top:17px;margin-bottom:0">O WABA é exclusivo do seu tenant. O plano permite até <?=metaE($user['max_numbers']??0)?> número(s). Não coloque o App Secret na caixa do token.</div>
@@ -193,13 +193,24 @@ footer{max-width:1180px;margin:0 auto 25px;padding:0 24px;color:#72887d;font-siz
 <p class="help">Configure os webhooks para que mensagens recebidas, entregas e mudanças de status dos templates cheguem ao gateway.</p>
 <label style="font-size:.82rem;font-weight:750">URL pública de callback
 <input readonly value="https://zapapi.inf.br/webhooks/meta" onclick="this.select()"></label>
-<p class="help" style="margin-top:10px">Na Meta, configure e valide essa URL no <strong>app proprietário da integração</strong>. O Verify Token e o App Secret ficam com o operador da plataforma, pois a rota atual utiliza um único aplicativo compartilhado.</p>
+<p class="help" style="margin-top:10px">Na Meta, configure e valide essa URL no <strong>app compartilhado da plataforma</strong>. Os campos globais são administrados separadamente; os IDs e o token de acesso abaixo pertencem a cada WABA/número.</p>
+<div class="aside" style="margin-top:12px"><strong>Campos globais do aplicativo Meta</strong>
+<div class="twocol" style="margin-top:8px">
+<label>Meta App ID<input readonly value="<?=metaE(config('META_APP_ID')?:'Não configurado')?>"></label>
+<label>App Secret<input type="password" readonly value="<?=config('META_APP_SECRET')!==''?'************':''?>" placeholder="<?=config('META_APP_SECRET')!==''?'Configurado no servidor':'Pendente no servidor'?>"></label>
+<label>Token de verificação<input type="password" readonly value="<?=config('META_VERIFY_TOKEN')!==''?'************':''?>" placeholder="<?=config('META_VERIFY_TOKEN')!==''?'Configurado no servidor':'Pendente no servidor'?>"></label>
+<label>Versão da Graph API<input readonly value="<?=metaE(config('GRAPH_VERSION','v26.0'))?>"></label>
+<label>URL base da Graph API<input readonly value="https://graph.facebook.com/"></label>
+<label>Endpoint de callback<input readonly value="https://zapapi.inf.br/webhooks/meta"></label>
+</div>
+<p style="margin:10px 0 0;font-size:.8rem;color:#567065">O App Secret e o token de verificação não são exibidos para clientes. O superadministrador pode configurar os valores em <a class="link" href="/admin/meta">Configuração global da Meta</a>.</p>
+</div>
 <div class="aside"><b>Eventos recomendados</b><p class="mono" style="margin:10px 0">messages<br>message_template_status_update<br>message_template_quality_update<br>template_category_update</p><span style="font-size:.78rem;color:#567065">A disponibilidade exata depende das permissões do seu aplicativo e dos campos atuais da Meta.</span></div>
 <?php if($accounts): ?><form method="post" action="/painel/meta" style="margin-top:16px" class="form">
 <input type="hidden" name="csrf" value="<?=metaE($csrf)?>"><input type="hidden" name="action" value="subscribe">
 <label>WABA para inscrição <select name="account_id"><?php foreach($accounts as $a): ?><option value="<?=metaE($a['id'])?>"><?=metaE($a['name'].' · '.$a['waba_id'])?></option><?php endforeach; ?></select></label>
 <button class="btn secondary" type="submit" <?=$active?'':'disabled'?>>Solicitar inscrição do app no WABA</button></form><?php endif; ?>
-<div class="notice warn" style="margin-top:16px;margin-bottom:0">Se você possui aplicativo Meta próprio, será necessária a configuração adicional de App Secret e verificação individual. O callback compartilhado não aceita automaticamente a assinatura de aplicativos externos.</div>
+<div class="notice warn" style="margin-top:16px;margin-bottom:0">Assine o WABA no mesmo aplicativo cujo App Secret está configurado no servidor. Tokens emitidos por outro aplicativo podem gerar uma assinatura diferente e os eventos serão recusados.</div>
 </section>
 <section class="box" id="api"><h2>6. Chaves de API do seu tenant</h2>
 <p class="help">Use uma chave exclusiva em cada integração de ERP, sistema de reservas ou automação. Ela será mostrada apenas uma vez.</p>

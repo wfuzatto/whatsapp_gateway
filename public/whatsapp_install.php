@@ -11,6 +11,8 @@ header('X-Robots-Tag: noindex, nofollow');
 $error=$values['error']??null;
 $admin=$values['admin']??null;
 $stats=$values['stats']??[];
+$meta=$values['meta']??[];
+$saved=$values['saved']??false;
 $db=$db??[];
 $ready=$protectedKey??false;
 ?>
@@ -19,6 +21,7 @@ $ready=$protectedKey??false;
 <title><?=instE(match($mode) {
  'install'=>'Instalação inicial', 'installed'=>'Sistema instalado',
  'login'=>'Acesso do administrador', 'dashboard'=>'Administração',
+ 'meta-settings'=>'Configuração Meta',
  default=>'WhatsApp Gateway'
 })?> · ZapApi</title>
 <style>
@@ -30,7 +33,8 @@ $ready=$protectedKey??false;
 <header class="top"><div class="wrap topinner">
 <a class="brand" href="/"><img class="zapapi-brand" src="/whatsapp_assets/whatsapp_zapapi_logo.svg" width="188" height="53" alt="ZapApi"></a>
 <div><a class="link" href="/">Página inicial</a> &nbsp; · &nbsp; <a class="link" href="/admin">Administração</a>
-<?php if($mode==='dashboard'): ?>
+<?php if($mode==='dashboard' || $mode==='meta-settings'): ?>
+<a class="link" href="/admin/meta">Integração Meta</a> &nbsp; · &nbsp;
 <form style="display:inline" action="/admin/sair" method="post"><input type="hidden" name="csrf" value="<?=instE($csrf)?>"><button class="logout" type="submit">Sair</button></form>
 <?php endif;?></div>
 </div></header>
@@ -86,6 +90,7 @@ $ready=$protectedKey??false;
 </form></div>
 <?php elseif($mode==='dashboard' && $admin): ?>
 <div class="headerline"><div><div class="eyebrow">Superadministração</div><h1 style="margin:0;letter-spacing:-.04em">Olá, <?=instE($admin['name'])?></h1><p style="color:#678078">Aprovação de assinaturas e gerenciamento inicial.</p></div><a class="btn btn-outline" href="/">Ver site público</a></div>
+<p><a class="btn btn-outline" href="/admin/meta">Configurar aplicativo e webhook da Meta →</a></p>
 <section class="box"><div class="headerline"><h2>Assinaturas</h2><span class="badge">Ativação comercial manual</span></div>
 <div class="stats">
 <?php foreach(($stats['counts']??[]) as $st): ?><div class="stat"><strong><?=instE($st['amount'])?></strong><small><?=instE($st['status'])?></small></div><?php endforeach; ?>
@@ -103,6 +108,26 @@ $ready=$protectedKey??false;
 <?php if(empty($stats['subscriptions'])): ?><tr><td colspan="5">Nenhum cadastro realizado até o momento.</td></tr><?php endif;?>
 </tbody></table></div>
 <p>Os clientes são criados pelo autocadastro. A aprovação aqui não realiza cobrança: confirme o pagamento comercialmente antes de liberar a assinatura.</p>
+</section>
+<?php elseif($mode==='meta-settings' && $admin): ?>
+<div class="intro"><div class="eyebrow">Superadministração · aplicativo compartilhado</div><h1>Integração Meta e webhook.</h1><p>Configure as credenciais globais do aplicativo que recebe eventos dos WABAs conectados à plataforma.</p></div>
+<section class="box" style="max-width:760px;margin:auto">
+<div class="headerline"><h2>Credenciais do aplicativo Meta</h2><span class="badge <?=!empty($meta['app_id'])&&!empty($meta['app_secret_configured'])&&!empty($meta['verify_token'])?'active':''?>"><?=!empty($meta['app_id'])&&!empty($meta['app_secret_configured'])&&!empty($meta['verify_token'])?'Configurado':'Configuração pendente'?></span></div>
+<?php if($saved): ?><div class="notice success" role="status">Configuração Meta salva no arquivo privado do servidor.</div><?php endif; ?>
+<?php if($error): ?><div class="notice error" role="alert"><?=instE($error)?></div><?php endif; ?>
+<form class="form" method="post" action="/admin/meta" autocomplete="off">
+<input type="hidden" name="csrf" value="<?=instE($csrf)?>">
+<label>Meta App ID<input type="text" name="meta_app_id" required inputmode="numeric" pattern="[0-9]+" maxlength="40" value="<?=instE($meta['app_id']??'')?>" placeholder="Ex.: 123456789012345"><small>Identifica o app compartilhado usado para configurar a assinatura do webhook.</small></label>
+<label>App Secret<input type="password" name="meta_app_secret" maxlength="128" autocomplete="new-password" placeholder="<?=!empty($meta['app_secret_configured'])?'Salvo; deixe vazio para manter':'Informe o App Secret do app Meta'?>"><small><?=!empty($meta['app_secret_configured'])?'O valor atual fica oculto. Deixe vazio para mantê-lo.':'Necessário para validar a assinatura SHA-256 dos eventos recebidos.'?> Nunca use o token de acesso do número neste campo.</small></label>
+<label>Token de verificação<input type="text" name="meta_verify_token" required minlength="8" maxlength="128" autocomplete="off" value="<?=instE($meta['verify_token']??'')?>" placeholder="Crie ou informe o token configurado na Meta"><small>Copie exatamente este valor para o campo “Verificar token” da Meta. Ele valida o desafio GET do callback.</small></label>
+<div class="two">
+<label>URL de callback<input type="url" readonly value="<?=instE($meta['callback_url']??'https://zapapi.inf.br/webhooks/meta')?>"></label>
+<label>Versão da Graph API<input type="text" readonly value="<?=instE($meta['graph_version']??'v26.0')?>"></label>
+</div>
+<label>URL base da Graph API<input type="url" readonly value="https://graph.facebook.com/"></label>
+<button class="btn" type="submit">Salvar configuração Meta →</button>
+</form>
+<div class="notice warn">WABA ID, Phone Number ID e token de acesso são específicos de cada número e continuam na tela “Integração Meta” do cliente. App ID, App Secret e token de verificação são globais e ficam restritos ao superadministrador.</div>
 </section>
 <?php else: ?>
 <div class="intro"><h1>Não foi possível concluir.</h1><p><?=instE($error??'Confira os requisitos e tente novamente.')?></p></div>

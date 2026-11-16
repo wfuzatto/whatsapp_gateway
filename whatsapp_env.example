@@ -10,6 +10,8 @@ DB_USER=zapapi1
 DB_PASSWORD=COLOQUE_A_SENHA_NOVA_SOMENTE_NO_SERVIDOR
 # Gere com: php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"
 MASTER_KEY_BASE64=ALTERE_COM_CHAVE_32_BYTES_BASE64
+# Aplicativo Meta compartilhado pela plataforma.
+META_APP_ID=ALTERE
 # App secret da Meta; nunca use o access token como app secret.
 META_APP_SECRET=ALTERE
 META_VERIFY_TOKEN=ALTERE_TOKEN_ALEATORIO

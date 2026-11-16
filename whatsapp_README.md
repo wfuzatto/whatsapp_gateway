@@ -114,7 +114,7 @@ O instalador mostra os parâmetros do banco remoto pré-configurados (host: `zap
 
 Depois de confirmar, a instalação verifica acesso ao banco, cria as 18 tabelas com prefixo `whatsapp_`, carrega os três planos iniciais, registra o administrador, gera `MASTER_KEY_BASE64` e token de verificação, e salva o `.env` privado em `/home/zapapi1/.env`. O arquivo não é enviado por FTP nem publicado no Git. A chave temporária é removida e um marcador de instalação é gravado fora do diretório público.
 
-Depois, acesse **`/admin`** ou **`/admin/entrar`**. No painel, veja os tenants e ative/suspenda assinaturas manualmente. Ativar assinatura não cobra o cliente.
+Depois, acesse **`/admin`** ou **`/admin/entrar`**. Em **`/admin/meta`**, configure o Meta App ID, App Secret e Verify Token do app compartilhado; o App Secret fica oculto e o arquivo `.env` permanece fora de `public_html`. Copie o Verify Token exibido para a configuração do webhook no painel Meta. No painel administrativo, veja os tenants e ative/suspenda assinaturas manualmente. Ativar assinatura não cobra o cliente.
 
 O instalador **não sobrescreve `.env` existente, não derruba tabelas e recusa reinstalação** após a criação do primeiro superadmin. Se a hospedagem não autorizar gravar acima de `public_html`, interrompe com erro seguro em vez de expor segredos na pasta pública. Por segurança, não use a senha de FTP como senha do MySQL; troque senhas divulgadas anteriormente.
 

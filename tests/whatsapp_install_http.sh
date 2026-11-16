@@ -2,6 +2,7 @@
 # Teste HTTP do assistente em banco e diretorio descartaveis do CI.
 set -Eeuo pipefail
 export APP_ENV=test APP_REQUIRE_HTTPS=0
+php tests/whatsapp_meta_config_smoke.php
 tmp="$(mktemp -d)"
 export WHATSAPP_INSTALL_TEST_DIR="$tmp/secrets"
 mkdir -p "$WHATSAPP_INSTALL_TEST_DIR"
@@ -80,3 +81,23 @@ code="$(curl -sS -o /dev/null -w '%{http_code}' -b "$tmp/cookie" -c "$tmp/cookie
 curl -fsS -b "$tmp/cookie" "$host/admin" -o "$tmp/again.html"
 grep -q 'Superadministração' "$tmp/again.html"
 echo "OK: login do superadmin com senha protegida"
+curl -fsS -b "$tmp/cookie" "$host/admin/meta" -o "$tmp/meta.html"
+grep -q 'Credenciais do aplicativo Meta' "$tmp/meta.html"
+grep -q 'Meta App ID' "$tmp/meta.html"
+grep -q 'App Secret' "$tmp/meta.html"
+grep -q 'Token de verificação' "$tmp/meta.html"
+csrf="$(grep -o 'name="csrf" value="[^"]*"' "$tmp/meta.html" | head -1 | cut -d'"' -f4)"
+code="$(curl -sS -o "$tmp/meta-saved.html" -D "$tmp/meta-headers" -w '%{http_code}' \
+ -b "$tmp/cookie" -c "$tmp/cookie" -X POST "$host/admin/meta" \
+ --data-urlencode "csrf=$csrf" \
+ --data-urlencode 'meta_app_id=1683987243242501' \
+ --data-urlencode 'meta_app_secret=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+ --data-urlencode 'meta_verify_token=zapapi2026*')"
+[[ "$code" == "303" ]] || { echo "Falha ao salvar a configuração Meta: HTTP $code"; exit 1; }
+grep -qi 'location: /admin/meta?saved=1' "$tmp/meta-headers"
+grep -Fq 'META_APP_ID=1683987243242501' "$WHATSAPP_INSTALL_TEST_DIR/.env"
+grep -Fq 'META_APP_SECRET=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "$WHATSAPP_INSTALL_TEST_DIR/.env"
+grep -Fq 'META_VERIFY_TOKEN=zapapi2026*' "$WHATSAPP_INSTALL_TEST_DIR/.env"
+challenge="$(curl -fsS "$host/webhooks/meta?hub.mode=subscribe&hub.verify_token=zapapi2026%2A&hub.challenge=ci-webhook-challenge")"
+[[ "$challenge" == 'ci-webhook-challenge' ]]
+echo "OK: credenciais Meta salvas e desafio do webhook validado"
