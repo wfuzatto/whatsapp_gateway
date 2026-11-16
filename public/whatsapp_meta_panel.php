@@ -110,7 +110,7 @@ footer{max-width:1180px;margin:0 auto 25px;padding:0 24px;color:#72887d;font-siz
 <label>WhatsApp Business Account ID (WABA) <input name="waba_id" required inputmode="numeric" pattern="[0-9]+" maxlength="40" placeholder="Ex.: 123456789012345"></label>
 <label>Phone Number ID <input name="phone_number_id" required inputmode="numeric" pattern="[0-9]+" maxlength="40" placeholder="Ex.: 987654321098765"></label>
 </div>
-<label>Token de acesso de longa duração da Meta <input type="password" name="access_token" required minlength="30" maxlength="4096" autocomplete="off" placeholder="Cole o token de usuário de sistema"><small>Use o token permanente do usuário de sistema, com permissões whatsapp_business_management e whatsapp_business_messaging. Nunca exibiremos o token após salvar. Para rotacioná-lo, use os mesmos IDs e informe o token novo.</small></label>
+<label>Token de acesso de longa duração da Meta <input type="password" name="access_token" required minlength="30" maxlength="4096" autocomplete="new-password" placeholder="Cole o token de usuário de sistema"><small>Use o token permanente do usuário de sistema, com permissões whatsapp_business_management e whatsapp_business_messaging. Nunca exibiremos o token após salvar. Para rotacioná-lo, use os mesmos IDs e informe o token novo.</small></label>
 <button type="submit" class="btn" <?=$active?'':'disabled'?>>Validar e salvar integração</button>
 </form>
 <div class="notice warn" style="margin-top:17px;margin-bottom:0">O WABA é exclusivo do seu tenant. O plano permite até <?=metaE($user['max_numbers']??0)?> número(s). Não coloque o App Secret na caixa do token.</div>
