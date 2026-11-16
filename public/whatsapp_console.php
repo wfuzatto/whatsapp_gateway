@@ -173,7 +173,7 @@ header('X-Robots-Tag: noindex, nofollow');
   if(composer)composer.addEventListener('submit',async function(event){
     event.preventDefault();if(sending)return;sending=true;var button=composer.querySelector('button[type="submit"]'),original=button?button.textContent:'Enviar →';if(button){button.disabled=true;button.textContent='Enviando…';}showFeedback('Enviando mensagem à Meta…','ok');
     try{
-      var response=await fetch(composer.action,{method:'POST',body:new FormData(composer),credentials:'same-origin',cache:'no-store',headers:{'X-Requested-With':'XMLHttpRequest'}}),html=await response.text();
+      var response=await fetch(composer.getAttribute('action')||window.location.href,{method:'POST',body:new FormData(composer),credentials:'same-origin',cache:'no-store',headers:{'X-Requested-With':'XMLHttpRequest'}}),html=await response.text();
       if(new URL(response.url).pathname==='/entrar'){window.location.assign(response.url);return;}
       if(!response.ok){var parsed=new DOMParser().parseFromString(html,'text/html'),alert=parsed.querySelector('[role="alert"]');throw new Error(alert?alert.textContent.trim():'Não foi possível confirmar o envio.');}
       var parsedSuccess=new DOMParser().parseFromString(html,'text/html'),sendError=parsedSuccess.querySelector('[role="alert"]');if(sendError)throw new Error(sendError.textContent.trim());
