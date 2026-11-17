@@ -4,6 +4,10 @@ if(!defined('WHATSAPP_SIDEBAR_VIEW')){http_response_code(404);exit;}
 $sidebarUser=$sidebarUser??($user??[]);
 $sidebarPage=$sidebarPage??($page??($mode==='dashboard'?'dashboard':''));
 $sidebarCsrf=(string)($sidebarCsrf??($csrf??''));
+$sidebarData=is_array($data??null)?$data:[];
+$sidebarAccounts=$sidebarData['accounts']??[];
+$sidebarAccountId=(int)($sidebarData['selected_account_id']??0);
+$sidebarWaId=(string)($sidebarData['selected_wa_id']??'');
 $sidebarCompany=(string)($sidebarUser['company']??$sidebarUser['name']??'Sua empresa');
 $sidebarName=(string)($sidebarUser['name']??'Usuário');
 $sidebarPlan=(string)($sidebarUser['plan_title']??'Plano da empresa');
@@ -49,6 +53,15 @@ $sidebarE=static fn(mixed $value):string=>htmlspecialchars((string)$value,ENT_QU
       </div>
     </details>
   </nav>
+  <?php if($sidebarPage==='inbox'&&$sidebarAccounts): ?>
+  <form class="whatsapp-sidebar-connection" method="get" action="/painel/conversas">
+    <label for="sidebar-account-filter">Conexão</label>
+    <select id="sidebar-account-filter" name="account_id" onchange="this.form.submit()">
+      <?php foreach($sidebarAccounts as $account): ?><option value="<?=(int)$account['id']?>" <?=(int)$account['id']===$sidebarAccountId?'selected':''?>><?=$sidebarE($account['name'])?> · <?=$sidebarE($account['phone_number_id'])?></option><?php endforeach; ?>
+    </select>
+    <?php if($sidebarWaId): ?><input type="hidden" name="wa_id" value="<?=$sidebarE($sidebarWaId)?>"><?php endif; ?>
+  </form>
+  <?php endif; ?>
   <div class="whatsapp-sidebar-account">
     <span class="whatsapp-sidebar-avatar"><?=function_exists('mb_strtoupper')?htmlspecialchars(mb_strtoupper(mb_substr($sidebarName,0,1,'UTF-8'),'UTF-8'),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8'):htmlspecialchars(strtoupper(substr($sidebarName,0,1)),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8')?></span>
     <span class="whatsapp-sidebar-account-copy"><b><?=$sidebarE($sidebarName)?></b><small><?=$sidebarE($sidebarUser['email']??'Conta da empresa')?></small></span>

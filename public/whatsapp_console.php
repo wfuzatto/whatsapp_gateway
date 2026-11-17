@@ -79,7 +79,6 @@ header('X-Robots-Tag: noindex, nofollow');
 <?php if($page==='inbox'): ?><div id="live-feedback" class="notice" role="status" aria-live="polite" hidden></div><?php endif; ?>
 
 <?php if($page==='inbox'): ?>
-<div class="toolbar accountbar"><form method="get" action="/painel/conversas"><label for="account-filter">Conexão</label><select id="account-filter" name="account_id" onchange="this.form.submit()"><?php foreach($accounts as $a): ?><option value="<?=(int)$a['id']?>" <?=(int)$a['id']===$accountId?'selected':''?>><?=consoleE($a['name'])?> · <?=consoleE($a['phone_number_id'])?><?=($a['status']??'')==='active'?'':' · suspensa'?></option><?php endforeach; ?></select><?php if($waId): ?><input type="hidden" name="wa_id" value="<?=consoleE($waId)?>"><?php endif; ?></form><span class="mobile-note">Até 100 mensagens por conversa</span></div>
 <?php if(!$accounts): ?><section class="panel empty"><b>Conecte um número para começar</b><p>Adicione uma integração Meta do próprio tenant para receber mensagens.</p><a class="btn" href="/painel/meta">Configurar conexão Meta →</a></section>
 <?php else: ?><section class="panel inbox"><aside class="convlist"><div class="convtools"><form method="get" action="/painel/conversas"><input type="hidden" name="account_id" value="<?=$accountId?>"><input type="search" name="q" value="<?=consoleE($data['search']??'')?>" placeholder="Buscar nome ou número" aria-label="Buscar conversa"><button class="btn secondary" type="submit">Buscar</button></form><div class="filters"><a class="<?=$filter==='all'?'active':''?>" href="/painel/conversas?account_id=<?=$accountId?>">Todas</a><a class="<?=$filter==='open'?'active':''?>" href="/painel/conversas?account_id=<?=$accountId?>&status=open">Abertas</a><a class="<?=$filter==='closed'?'active':''?>" href="/painel/conversas?account_id=<?=$accountId?>&status=closed">Encerradas</a></div></div>
 <div class="convrows"><?php foreach(($data['conversations']??[]) as $row): $rowWa=(string)$row['wa_id'];$isClosed=($row['conversation_status']??'')==='closed';if($isClosed&&!empty($row['closed_at'])&&!empty($row['last_inbound_at']))$isClosed=strtotime($row['last_inbound_at'].' UTC')<=strtotime($row['closed_at'].' UTC');$label=(string)($row['display_name']?:$rowWa); ?>
@@ -163,7 +162,7 @@ header('X-Robots-Tag: noindex, nofollow');
 <?php if($page==='inbox'): ?><script>
 (function(){
   var rowsBox=document.querySelector('.convrows'),stream=document.getElementById('message-stream'),soundButton=document.getElementById('sound-toggle');
-  var accountSelect=document.getElementById('account-filter'),feedback=document.getElementById('live-feedback');
+  var accountSelect=document.getElementById('sidebar-account-filter'),feedback=document.getElementById('live-feedback');
   if(!rowsBox)return;
   var params=new URLSearchParams(window.location.search),accountId=accountSelect?accountSelect.value:(params.get('account_id')||''),selectedWa=params.get('wa_id')||'';
   var seenMessages=new Set(Array.from(rowsBox.querySelectorAll('[data-message-id]')).map(function(row){return row.dataset.messageId;}));

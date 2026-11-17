@@ -27,6 +27,9 @@
 .whatsapp-nav-items a.whatsapp-nav-subitem{min-height:34px;padding-left:39px;color:#75877b;font-size:.74rem}
 .whatsapp-nav-items a.whatsapp-nav-subitem.is-current{color:#0b754f}
 .whatsapp-sidebar-account{display:flex;align-items:center;gap:9px;padding:12px 4px 2px;border-top:1px solid #edf1ee;margin-top:12px}
+.whatsapp-sidebar-connection{display:grid;gap:6px;margin:10px 2px 0;padding:10px;border:1px solid #e5ede8;border-radius:10px;background:#fbfdfb}
+.whatsapp-sidebar-connection label{color:#65786c;font-size:.68rem;font-weight:750}
+.whatsapp-sidebar-connection select{width:100%;min-width:0;border:1px solid #d4e1d8;border-radius:8px;padding:8px 9px;background:#fff;color:#14362e;font-size:.72rem}
 .whatsapp-sidebar-avatar{display:grid;place-items:center;width:34px;height:34px;flex:0 0 34px;border-radius:50%;background:#dff2e5;color:#17754f;font-size:.78rem;font-weight:850}
 .whatsapp-sidebar-account-copy b{font-size:.73rem;color:#314b3d}
 .whatsapp-sidebar-account-copy small{margin-top:3px;color:#929d95;font-size:.62rem}
