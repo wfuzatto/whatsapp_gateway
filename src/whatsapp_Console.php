@@ -194,8 +194,17 @@ final class WhatsAppConsole {
             throw new HttpError('Foto não encontrada.',404);
         $bytes=$row['photo_data']??null;if(is_resource($bytes))$bytes=stream_get_contents($bytes);
         if(!is_string($bytes)||$bytes==='')throw new HttpError('Foto não encontrada.',404);
-        header('Content-Type: '.$row['photo_mime']);header('Content-Length: '.strlen($bytes));
-        header('X-Content-Type-Options: nosniff');header('Cache-Control: private, no-store');
+        $etag='"'.hash('sha256',$bytes).'"';
+        header('Content-Type: '.$row['photo_mime']);
+        header('X-Content-Type-Options: nosniff');header('Cache-Control: private, max-age=0, must-revalidate');
+        header('Vary: Cookie');header('ETag: '.$etag);
+        $ifNoneMatch=(string)($_SERVER['HTTP_IF_NONE_MATCH']??'');$matches=false;
+        foreach(explode(',',$ifNoneMatch) as $candidate) {
+            $candidate=trim($candidate);
+            if($candidate==='*'||$candidate===$etag||$candidate==='W/'.$etag){$matches=true;break;}
+        }
+        if($matches){http_response_code(304);exit;}
+        header('Content-Length: '.strlen($bytes));
         header('Content-Disposition: inline; filename="contact-photo"');echo $bytes;exit;
     }
     private static function listConversations(int $tenantId,int $accountId,string $search,string $filter): array {
@@ -616,7 +625,8 @@ final class WhatsAppConsole {
         $allowed=['image/jpeg','image/png','image/webp','video/mp4','video/3gpp','audio/aac','audio/mp4','audio/mpeg','audio/amr','audio/ogg','application/pdf'];
         if(!in_array($mime,$allowed,true))$mime='application/octet-stream';
         header('Content-Type: '.$mime);header('Content-Length: '.strlen($bytes));header('X-Content-Type-Options: nosniff');
-        header('Cache-Control: private, no-store');header('Content-Disposition: inline; filename="whatsapp-media"');
+        header('Cache-Control: private, max-age=2592000, immutable');header('Vary: Cookie');
+        header('Content-Disposition: inline; filename="whatsapp-media"');
         echo $bytes;exit;
     }
 
