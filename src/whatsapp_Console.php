@@ -197,7 +197,7 @@ final class WhatsAppConsole {
         $etag='"'.hash('sha256',$bytes).'"';
         header('Content-Type: '.$row['photo_mime']);
         header('X-Content-Type-Options: nosniff');header('Cache-Control: private, max-age=0, must-revalidate');
-        header('Vary: Cookie');header('ETag: '.$etag);
+        header('Vary: Cookie');header('ETag: '.$etag);header_remove('Pragma');
         $ifNoneMatch=(string)($_SERVER['HTTP_IF_NONE_MATCH']??'');$matches=false;
         foreach(explode(',',$ifNoneMatch) as $candidate) {
             $candidate=trim($candidate);
@@ -625,7 +625,7 @@ final class WhatsAppConsole {
         $allowed=['image/jpeg','image/png','image/webp','video/mp4','video/3gpp','audio/aac','audio/mp4','audio/mpeg','audio/amr','audio/ogg','application/pdf'];
         if(!in_array($mime,$allowed,true))$mime='application/octet-stream';
         header('Content-Type: '.$mime);header('Content-Length: '.strlen($bytes));header('X-Content-Type-Options: nosniff');
-        header('Cache-Control: private, max-age=2592000, immutable');header('Vary: Cookie');
+        header('Cache-Control: private, max-age=2592000, immutable');header('Vary: Cookie');header_remove('Pragma');
         header('Content-Disposition: inline; filename="whatsapp-media"');
         echo $bytes;exit;
     }
