@@ -49,6 +49,9 @@ header('X-Robots-Tag: noindex, nofollow');
 .media-play-icon{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:2.5rem;text-shadow:0 2px 12px #000;background:#0002;pointer-events:none}
 .bubble .media-sticker{display:block;width:auto;max-width:200px;max-height:200px;object-fit:contain}
 .bubble .media-sticker-video{display:block;width:auto;height:auto;max-width:200px;max-height:200px;object-fit:contain;background:transparent;pointer-events:none}
+.stream .bubble{max-width:min(50%,620px)}
+.stream .bubble:has(audio){width:min(50%,420px)}
+.stream .bubble audio{display:block;width:100%;max-width:100%;height:44px}
 .bubble audio{display:block;width:min(100%,340px);max-width:100%}.bubble .media-document{display:inline-flex;padding:8px 10px;background:#f3f8f5;border-radius:8px}
 .media-modal{position:fixed;inset:0;margin:auto;padding:48px 14px 14px;width:min(96vw,1100px);max-width:96vw;max-height:92vh;border:0;border-radius:14px;background:#101714;color:#fff;overflow:hidden;box-shadow:0 18px 70px #0008}
 .media-modal::backdrop{background:#07110edb;backdrop-filter:blur(3px)}.media-modal-content{display:grid;place-items:center;width:100%;height:min(78vh,800px);overflow:auto}
