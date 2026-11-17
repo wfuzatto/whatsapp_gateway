@@ -48,6 +48,7 @@ header('X-Robots-Tag: noindex, nofollow');
 .bubble .media-preview img{display:block;max-width:100%;max-height:360px;object-fit:contain}.bubble .media-video-preview video{display:block;width:min(100%,360px);max-height:280px;object-fit:cover;background:#111;pointer-events:none}
 .media-play-icon{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:2.5rem;text-shadow:0 2px 12px #000;background:#0002;pointer-events:none}
 .bubble .media-sticker{display:block;width:auto;max-width:200px;max-height:200px;object-fit:contain}
+.bubble .media-sticker-video{display:block;width:auto;height:auto;max-width:200px;max-height:200px;object-fit:contain;background:transparent;pointer-events:none}
 .bubble audio{display:block;width:min(100%,340px);max-width:100%}.bubble .media-document{display:inline-flex;padding:8px 10px;background:#f3f8f5;border-radius:8px}
 .media-modal{position:fixed;inset:0;margin:auto;padding:48px 14px 14px;width:min(96vw,1100px);max-width:96vw;max-height:92vh;border:0;border-radius:14px;background:#101714;color:#fff;overflow:hidden;box-shadow:0 18px 70px #0008}
 .media-modal::backdrop{background:#07110edb;backdrop-filter:blur(3px)}.media-modal-content{display:grid;place-items:center;width:100%;height:min(78vh,800px);overflow:auto}
@@ -78,7 +79,7 @@ header('X-Robots-Tag: noindex, nofollow');
 <section class="chat"><?php if($contact): ?><div class="chathead"><div class="chatname"><span class="avatar" data-photo-state="<?=!empty($contact['photo_mime'])?'1':'0'?>"><?=consoleE(consoleInitial((string)($contact['display_name']?:$waId)))?><?php if(!empty($contact['photo_mime'])): ?><img src="<?=consoleE(WhatsAppConsole::contactPhotoUrl($accountId,$waId))?>" alt="" loading="lazy"><?php endif; ?></span><div><b><?=consoleE($contact['display_name']?:$waId)?></b><small><?=consoleE($waId)?> · <?=consoleE($selectedAccount['name']??'WhatsApp')?></small></div></div>
 <form method="post" action="/painel/conversas"><input type="hidden" name="csrf" value="<?=consoleE($data['csrf'])?>"><input type="hidden" name="action" value="set_conversation_status"><input type="hidden" name="account_id" value="<?=$accountId?>"><input type="hidden" name="wa_id" value="<?=consoleE($waId)?>"><input type="hidden" name="status" value="<?=($data['conversation_state']['status']??'open')==='closed'?'open':'closed'?>"><button class="btn secondary" type="submit"><?=($data['conversation_state']['status']??'open')==='closed'?'Reabrir':'Encerrar'?></button></form></div>
 <div class="stream" id="message-stream"><?php foreach(($data['messages']??[]) as $m): $mediaUrl=$m['media_id']?'/painel/midia?'.http_build_query(['account_id'=>$accountId,'wa_id'=>$waId,'id'=>$m['media_id']]):''; ?>
-<article class="bubble <?=$m['direction']==='outbound'?'out':''?>" data-message-id="<?=(int)$m['id']?>">
+<article class="bubble <?=$m['direction']==='outbound'?'out':''?>" data-message-id="<?=(int)$m['id']?>" data-direction="<?=consoleE($m['direction'])?>">
 <?php if($m['media_id']): ?>
 <?php if($m['message_type']==='image'): ?><button class="media-preview" type="button" data-media-open="image" data-media-src="<?=consoleE($mediaUrl)?>" aria-label="Ampliar imagem"><img src="<?=consoleE($mediaUrl)?>" alt="Imagem recebida" loading="lazy" decoding="async"></button>
 <?php elseif($m['message_type']==='sticker'): ?><img class="media-sticker" src="<?=consoleE($mediaUrl)?>" alt="Figurinha animada" loading="lazy" decoding="async">
@@ -189,12 +190,25 @@ header('X-Robots-Tag: noindex, nofollow');
     rowsBox.replaceChildren(fragment);
   }
   function conversationMediaUrl(mediaId){var url=new URL('/painel/midia',window.location.origin);url.searchParams.set('account_id',accountId);url.searchParams.set('wa_id',selectedWa);url.searchParams.set('id',mediaId);return url.toString();}
+  function activateStickerVideo(video){
+    var bubble=video.closest('.bubble'),preview=video.closest('.media-video-preview');
+    if(!bubble||bubble.dataset.direction!=='inbound'||!preview||video.readyState<1||!Number.isFinite(video.duration)||video.duration>6)return;
+    video.className='media-sticker-video';video.controls=false;video.removeAttribute('controls');video.muted=true;video.setAttribute('muted','');video.loop=true;video.setAttribute('loop','');video.autoplay=true;video.setAttribute('autoplay','');video.playsInline=true;video.setAttribute('playsinline','');video.preload='auto';video.disablePictureInPicture=true;video.disableRemotePlayback=true;
+    preview.replaceWith(video);var playback=video.play();if(playback&&playback.catch)playback.catch(function(){});
+  }
+  function enhanceStickerVideos(container){
+    if(!container)return;
+    container.querySelectorAll('.bubble[data-direction="inbound"] .media-video-preview video').forEach(function(video){
+      if(video.readyState>=1)activateStickerVideo(video);else video.addEventListener('loadedmetadata',function(){activateStickerVideo(video);},{once:true});
+    });
+  }
+  enhanceStickerVideos(stream);
   function renderMessages(messages){
     if(!stream)return;
     var nearBottom=stream.scrollHeight-stream.scrollTop-stream.clientHeight<90,fragment=document.createDocumentFragment();
     var statusNames={accepted:'Enviada à Meta',sent:'Enviada',delivered:'Entregue',read:'Lida',failed:'Falhou',received:'Recebida'};
     if(!messages.length){var empty=node('div','empty');empty.appendChild(node('b','', 'Sem mensagens'));empty.appendChild(document.createTextNode('Envie um template aprovado para iniciar.'));fragment.appendChild(empty);}
-    messages.forEach(function(message){var bubble=node('article','bubble'+(message.direction==='outbound'?' out':''));bubble.dataset.messageId=String(message.id||'');
+    messages.forEach(function(message){var bubble=node('article','bubble'+(message.direction==='outbound'?' out':''));bubble.dataset.messageId=String(message.id||'');bubble.dataset.direction=message.direction||'';
       if(message.media_id){var src=conversationMediaUrl(message.media_id),type=message.message_type||'';
         if(type==='image'){var preview=node('button','media-preview');preview.type='button';preview.dataset.mediaOpen='image';preview.dataset.mediaSrc=src;preview.setAttribute('aria-label','Ampliar imagem');var image=node('img');image.src=src;image.alt='Imagem recebida';image.loading='lazy';image.decoding='async';preview.appendChild(image);bubble.appendChild(preview);}
         else if(type==='sticker'){var sticker=node('img','media-sticker');sticker.src=src;sticker.alt='Figurinha animada';sticker.loading='lazy';sticker.decoding='async';bubble.appendChild(sticker);}
@@ -205,7 +219,7 @@ header('X-Robots-Tag: noindex, nofollow');
       else {var body=node('div','',message.text);body.style.whiteSpace='pre-wrap';bubble.appendChild(body);}
       bubble.appendChild(node('time','',(message.time_label||'')+' · '+(statusNames[message.status]||message.status)));fragment.appendChild(bubble);
     });
-    stream.replaceChildren(fragment);if(nearBottom||!stream.dataset.initialized)stream.scrollTop=stream.scrollHeight;stream.dataset.initialized='1';
+    stream.replaceChildren(fragment);enhanceStickerVideos(stream);if(nearBottom||!stream.dataset.initialized)stream.scrollTop=stream.scrollHeight;stream.dataset.initialized='1';
   }
   var mediaDialog=document.querySelector('[data-media-modal]'),mediaContent=mediaDialog&&mediaDialog.querySelector('[data-media-modal-content]');
   function clearMediaDialog(){if(!mediaContent)return;mediaContent.querySelectorAll('video').forEach(function(video){video.pause();video.removeAttribute('src');video.load();});mediaContent.replaceChildren();}
