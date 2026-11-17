@@ -52,6 +52,7 @@ CREATE TABLE whatsapp_contacts (
   display_name VARCHAR(255) DEFAULT NULL,
   photo_data MEDIUMBLOB DEFAULT NULL,
   photo_mime VARCHAR(40) DEFAULT NULL,
+  photo_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
   opt_in_at DATETIME DEFAULT NULL,
   opt_in_source VARCHAR(255) DEFAULT NULL,
   last_inbound_at DATETIME DEFAULT NULL,
