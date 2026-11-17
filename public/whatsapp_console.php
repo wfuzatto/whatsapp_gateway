@@ -192,7 +192,7 @@ header('X-Robots-Tag: noindex, nofollow');
   function conversationMediaUrl(mediaId){var url=new URL('/painel/midia',window.location.origin);url.searchParams.set('account_id',accountId);url.searchParams.set('wa_id',selectedWa);url.searchParams.set('id',mediaId);return url.toString();}
   function activateStickerVideo(video){
     var bubble=video.closest('.bubble'),preview=video.closest('.media-video-preview');
-    if(!bubble||bubble.dataset.direction!=='inbound'||!preview||video.readyState<1||!Number.isFinite(video.duration)||video.duration>6)return;
+    if(!bubble||bubble.dataset.direction!=='inbound'||!preview||video.readyState<1||!Number.isFinite(video.duration)||video.duration>6||video.videoWidth>320||video.videoHeight>320)return;
     video.className='media-sticker-video';video.controls=false;video.removeAttribute('controls');video.muted=true;video.setAttribute('muted','');video.loop=true;video.setAttribute('loop','');video.autoplay=true;video.setAttribute('autoplay','');video.playsInline=true;video.setAttribute('playsinline','');video.preload='auto';video.disablePictureInPicture=true;video.disableRemotePlayback=true;
     preview.replaceWith(video);var playback=video.play();if(playback&&playback.catch)playback.catch(function(){});
   }
