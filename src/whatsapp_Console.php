@@ -9,6 +9,9 @@ require_once __DIR__.'/whatsapp_Campaigns.php';
 
 final class WhatsAppConsole {
     private static function redirect(string $path): never { header('Location: '.$path,true,303);exit; }
+    private static function expectsJson(): bool {
+        return str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT']??'')),'application/json');
+    }
     private static function csrf(): string { return WhatsAppPortal::csrf(); }
     private static function user(): array {
         self::csrf();
@@ -265,6 +268,21 @@ final class WhatsAppConsole {
             return (new DateTimeImmutable($value,new DateTimeZone('UTC')))->setTimezone($tz)->format($format);
         } catch(Throwable $e) { return $value; }
     }
+    private static function conversationSummary(array $row): array {
+        $closed=($row['conversation_status']??'')==='closed';
+        if($closed&&!empty($row['last_inbound_at'])&&!empty($row['closed_at']))
+            $closed=strtotime($row['last_inbound_at'].' UTC')<=strtotime($row['closed_at'].' UTC');
+        return [
+            'wa_id'=>(string)$row['wa_id'],
+            'display_name'=>(string)($row['display_name']??''),
+            'has_photo'=>!empty($row['contact_photo_mime']),
+            'preview'=>(string)$row['preview'],
+            'time_label'=>self::liveTime((string)$row['created_at'],'H:i'),
+            'closed'=>$closed,
+            'message_id'=>(string)$row['message_id'],
+            'direction'=>(string)$row['direction'],
+        ];
+    }
     private static function liveUpdates(array $user): never {
         $tenantId=(int)$user['tenant_id'];
         $accountId=(int)self::field($_GET,'account_id',20);
@@ -276,21 +294,7 @@ final class WhatsAppConsole {
         if(!in_array($filter,['all','open','closed'],true))$filter='all';
         $conversations=self::listConversations($tenantId,$accountId,$search,$filter);
         $items=[];
-        foreach($conversations as $row) {
-            $closed=($row['conversation_status']??'')==='closed';
-            if($closed&&!empty($row['last_inbound_at'])&&!empty($row['closed_at']))
-                $closed=strtotime($row['last_inbound_at'].' UTC')<=strtotime($row['closed_at'].' UTC');
-            $items[]=[
-                'wa_id'=>(string)$row['wa_id'],
-                'display_name'=>(string)($row['display_name']??''),
-                'has_photo'=>!empty($row['contact_photo_mime']),
-                'preview'=>(string)$row['preview'],
-                'time_label'=>self::liveTime((string)$row['created_at'],'H:i'),
-                'closed'=>$closed,
-                'message_id'=>(string)$row['message_id'],
-                'direction'=>(string)$row['direction'],
-            ];
-        }
+        foreach($conversations as $row)$items[]=self::conversationSummary($row);
         $waId=self::field($_GET,'wa_id',32);$contact=null;$messages=[];
         $state=['status'=>'open','closed_at'=>null];$windowOpen=false;
         if($waId!==''&&$accountId) {
@@ -344,8 +348,9 @@ final class WhatsAppConsole {
         foreach($data['accounts'] as $account)if((int)$account['id']===$selected)$data['selected_account']=$account;
         if($selected&&!$data['selected_account'])throw new HttpError('Conexão não encontrada nesta empresa.',404);
         $data['templates']=[];$data['template_error']=null;
-        if($data['selected_account']&&in_array($page,['new','templates','campaigns'],true)) {
-            try {$data['templates']=self::templatesForPage(self::account($tenantId,$selected),$page);}
+        if($data['selected_account']&&in_array($page,['inbox','new','templates','campaigns'],true)) {
+            $templatePage=$page==='inbox'?'new':$page;
+            try {$data['templates']=self::templatesForPage(self::account($tenantId,$selected),$templatePage);}
             catch(MetaFailure $e){$data['template_error']='A Meta não respondeu. Verifique a conexão e tente novamente.';}
             catch(Throwable $e){$data['template_error']='Não foi possível consultar os templates desta conexão.';}
         }
@@ -460,6 +465,12 @@ final class WhatsAppConsole {
             VALUES (?,?,?,"open") ON DUPLICATE KEY UPDATE status="open",closed_at=NULL,updated_at=UTC_TIMESTAMP()')
             ->execute([$tenantId,$account['id'],$waId]);
         audit((int)$account['id'],'message.template.sent',['to'=>$waId,'template'=>$template['name'],'source'=>$source]);
+        if(self::expectsJson()) {
+            $summary=null;
+            foreach(self::listConversations($tenantId,(int)$account['id'],'','all') as $row)
+                if((string)$row['wa_id']===$waId){$summary=self::conversationSummary($row);break;}
+            response(201,['ok'=>true,'conversation'=>$summary,'wa_id'=>$waId]);
+        }
         self::flash('Conversa iniciada com o template aprovado “'.$template['name'].'”.');
         self::redirect('/painel/conversas?account_id='.(int)$account['id'].'&wa_id='.rawurlencode($waId));
     }
@@ -659,6 +670,7 @@ final class WhatsAppConsole {
             self::render($user,$page);return true;
         } catch(HttpError $e) {
             if($e->httpStatus===401){self::redirect('/entrar');}
+            if(self::expectsJson())response($e->httpStatus,['error'=>$e->getMessage()]);
             http_response_code($e->httpStatus);
             try {self::render($user??self::user(),$page,['error'=>$e->getMessage(),'old'=>$_POST]);}
             catch(Throwable $ignored){header('Content-Type: text/plain; charset=utf-8');echo $e->getMessage();}
@@ -666,11 +678,13 @@ final class WhatsAppConsole {
         } catch(MetaFailure $e) {
             http_response_code(502);
             $message=self::metaFailureMessage($e);
+            if(self::expectsJson())response(502,['error'=>$message]);
             try {self::render($user??self::user(),$page,['error'=>$message,'old'=>$_POST]);}
             catch(Throwable $ignored){header('Content-Type: text/plain; charset=utf-8');echo $message;}
             return true;
         } catch(Throwable $e) {
             error_log('WhatsApp console error: '.get_class($e));http_response_code(503);
+            if(self::expectsJson())response(503,['error'=>'A operação está indisponível agora. Tente novamente.']);
             try {self::render($user??self::user(),$page,['error'=>'A operação está indisponível agora. Atualize a página e tente novamente.','old'=>$_POST]);}
             catch(Throwable $ignored){header('Content-Type: text/plain; charset=utf-8');echo 'Serviço indisponível.';}
             return true;

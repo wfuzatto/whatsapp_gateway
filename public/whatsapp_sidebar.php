@@ -34,7 +34,6 @@ $sidebarE=static fn(mixed $value):string=>htmlspecialchars((string)$value,ENT_QU
       <summary><span>OPERAÇÃO</span><i aria-hidden="true"></i></summary>
       <div class="whatsapp-nav-items">
         <a class="<?=$sidebarPage==='inbox'||$sidebarPage==='new'?'is-current':''?>" href="/painel/conversas" <?=$sidebarPage==='inbox'?'aria-current="page"':''?>><span aria-hidden="true">▤</span> Conversas</a>
-        <a class="whatsapp-nav-subitem <?=$sidebarPage==='new'?'is-current':''?>" href="/painel/conversas/nova" <?=$sidebarPage==='new'?'aria-current="page"':''?>>＋ Iniciar conversa</a>
         <a class="<?=$sidebarPage==='contacts'?'is-current':''?>" href="/painel/contatos" <?=$sidebarPage==='contacts'?'aria-current="page"':''?>><span aria-hidden="true">♙</span> Contatos</a>
       </div>
     </details>
