@@ -39,7 +39,7 @@ header('X-Robots-Tag: noindex, nofollow');
 .composer-icon{background:transparent;color:#72847a;font-size:1.25rem}.composer-icon:hover{background:#eef6f1;color:#087b59}
 .composer-row textarea{flex:1;min-width:0;min-height:42px;max-height:120px;resize:vertical;border:1px solid #d8e4dc;border-radius:10px;padding:11px 12px;line-height:1.35;outline:0}
 .composer-row textarea:focus{border-color:#0b976b;box-shadow:0 0 0 3px #0b976b1b}
-.composer-send{background:#12865f;color:#fff;font-size:1.15rem;font-weight:800}.composer-send:hover{background:#056a4b}.composer-send:disabled{opacity:.55;cursor:not-allowed}
+.composer-send{background:#12865f;color:#fff;font-size:1.15rem;font-weight:800}.composer-send:hover{background:#056a4b}.composer-send:disabled{opacity:.55;cursor:not-allowed}.composer-send.is-pending,.composer-send.is-pending:hover{background:#7b8981;opacity:.8}.composer-send.is-error,.composer-send.is-error:hover{background:#c6372e;color:#fff;opacity:1}
 .composer-file{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;clip-path:inset(50%)}
 .composer-foot{min-height:18px;justify-content:flex-start;font-size:.7rem}.composer-foot select{font-size:.74rem;padding:5px 8px}.composer-file-name{color:#597064;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:40%}
 .emoji-picker{position:absolute;z-index:5;left:40px;bottom:46px;display:grid;grid-template-columns:repeat(6,36px);gap:3px;padding:7px;background:#fff;border:1px solid #dce8e1;border-radius:12px;box-shadow:0 8px 24px #173b2e20}
@@ -52,9 +52,14 @@ header('X-Robots-Tag: noindex, nofollow');
 .stream .bubble{max-width:min(50%,620px)}
 .stream .bubble:has(audio){width:min(50%,420px)}
 .stream .bubble audio{display:block;width:100%;max-width:100%;height:44px}
-.whatsapp-app-content.whatsapp-inbox-content{width:84%;max-width:none}
+.whatsapp-app-content.whatsapp-inbox-content{display:flex;flex-direction:column;width:92%;max-width:none;padding:8px 24px 16px}
 .pagehead.inbox-pagehead{justify-content:flex-end;margin-bottom:14px}
 .pagehead.inbox-pagehead .actions{margin-top:0}
+.whatsapp-inbox-content .pagehead.inbox-pagehead{flex:0 0 auto;margin-bottom:8px}
+.whatsapp-inbox-content>.panel.inbox{flex:1;min-height:0}
+.whatsapp-inbox-content .convlist{display:flex;flex-direction:column;min-height:0}
+.whatsapp-inbox-content .convrows{flex:1;max-height:none}
+.whatsapp-inbox-content .stream{min-height:0;max-height:none}
 .whatsapp-inbox-topbar .topbar-tenant{margin-left:auto}
 .whatsapp-inbox-topbar #sound-toggle{padding:8px 10px;font-size:.74rem;white-space:nowrap}
 .bubble audio{display:block;width:min(100%,340px);max-width:100%}.bubble .media-document{display:inline-flex;padding:8px 10px;background:#f3f8f5;border-radius:8px}
@@ -64,7 +69,7 @@ header('X-Robots-Tag: noindex, nofollow');
 .media-modal-close{position:absolute;top:8px;right:10px;width:34px;height:34px;border:0;border-radius:50%;background:#ffffff20;color:#fff;font-size:1.5rem;line-height:1}.media-modal-close:hover{background:#ffffff38}
 .avatar{position:relative;overflow:hidden}.avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
 @media(max-width:700px){.composer{padding:9px}.composer-row{gap:5px}.composer-icon,.composer-send{width:36px;height:36px;flex-basis:36px}.composer-file-name{max-width:48%}.emoji-picker{left:32px;grid-template-columns:repeat(6,34px)}}
-@media(max-width:700px){.whatsapp-app-content.whatsapp-inbox-content{width:100%}.whatsapp-inbox-topbar{gap:8px;padding:0 9px}.whatsapp-inbox-topbar .topbar-tenant{font-size:.67rem}.whatsapp-inbox-topbar #sound-toggle{padding:7px 8px;font-size:.69rem}.whatsapp-inbox-topbar .topbar-link{font-size:.7rem}}
+@media(max-width:700px){.whatsapp-app-content.whatsapp-inbox-content{width:100%;padding:8px 8px 12px}.whatsapp-inbox-content>.panel.inbox{flex:1}.whatsapp-inbox-content .inbox{min-height:0}.whatsapp-inbox-content .convlist{min-height:0}.whatsapp-inbox-content .convrows{max-height:240px}.whatsapp-inbox-topbar{gap:8px;padding:0 9px}.whatsapp-inbox-topbar .topbar-tenant{font-size:.67rem}.whatsapp-inbox-topbar #sound-toggle{padding:7px 8px;font-size:.69rem}.whatsapp-inbox-topbar .topbar-link{font-size:.7rem}}
 </style><link rel="stylesheet" href="/whatsapp_assets/whatsapp_sidebar.css"><script defer src="/whatsapp_assets/whatsapp_sidebar.js"></script></head><body class="whatsapp-app-mode">
 <div class="whatsapp-app-shell">
 <?php $sidebarPage=$page;$sidebarUser=$user;$sidebarCsrf=$data['csrf'];if(!defined('WHATSAPP_SIDEBAR_VIEW'))define('WHATSAPP_SIDEBAR_VIEW',true);require __DIR__.'/whatsapp_sidebar.php'; ?>
@@ -76,8 +81,6 @@ header('X-Robots-Tag: noindex, nofollow');
 <?php if($flash): ?><div class="notice <?=($flash['type']??'')==='error'?'bad':'ok'?>" role="status"><?=consoleE($flash['message']??'')?></div><?php endif; ?>
 <?php if($error): ?><div class="notice bad" role="alert"><?=consoleE($error)?></div><?php endif; ?>
 <?php if($data['template_error']??null): ?><div class="notice warn" role="status"><?=consoleE($data['template_error'])?> <a href="/painel/meta">Ver configuração Meta</a></div><?php endif; ?>
-<?php if($page==='inbox'): ?><div id="live-feedback" class="notice" role="status" aria-live="polite" hidden></div><?php endif; ?>
-
 <?php if($page==='inbox'): ?>
 <?php if(!$accounts): ?><section class="panel empty"><b>Conecte um número para começar</b><p>Adicione uma integração Meta do próprio tenant para receber mensagens.</p><a class="btn" href="/painel/meta">Configurar conexão Meta →</a></section>
 <?php else: ?><section class="panel inbox"><aside class="convlist"><div class="convtools"><form method="get" action="/painel/conversas"><input type="hidden" name="account_id" value="<?=$accountId?>"><input type="search" name="q" value="<?=consoleE($data['search']??'')?>" placeholder="Buscar nome ou número" aria-label="Buscar conversa"><button class="btn secondary" type="submit">Buscar</button></form><div class="filters"><a class="<?=$filter==='all'?'active':''?>" href="/painel/conversas?account_id=<?=$accountId?>">Todas</a><a class="<?=$filter==='open'?'active':''?>" href="/painel/conversas?account_id=<?=$accountId?>&status=open">Abertas</a><a class="<?=$filter==='closed'?'active':''?>" href="/painel/conversas?account_id=<?=$accountId?>&status=closed">Encerradas</a></div></div>
@@ -87,7 +90,7 @@ header('X-Robots-Tag: noindex, nofollow');
 <section class="chat"><?php if($contact): ?><div class="chathead"><div class="chatname"><span class="avatar" data-photo-state="<?=!empty($contact['photo_mime'])?'1':'0'?>"><?=consoleE(consoleInitial((string)($contact['display_name']?:$waId)))?><?php if(!empty($contact['photo_mime'])): ?><img src="<?=consoleE(WhatsAppConsole::contactPhotoUrl($accountId,$waId))?>" alt="" loading="lazy"><?php endif; ?></span><div><b><?=consoleE($contact['display_name']?:$waId)?></b><small><?=consoleE($waId)?> · <?=consoleE($selectedAccount['name']??'WhatsApp')?></small></div></div>
 <form method="post" action="/painel/conversas"><input type="hidden" name="csrf" value="<?=consoleE($data['csrf'])?>"><input type="hidden" name="action" value="set_conversation_status"><input type="hidden" name="account_id" value="<?=$accountId?>"><input type="hidden" name="wa_id" value="<?=consoleE($waId)?>"><input type="hidden" name="status" value="<?=($data['conversation_state']['status']??'open')==='closed'?'open':'closed'?>"><button class="btn secondary" type="submit"><?=($data['conversation_state']['status']??'open')==='closed'?'Reabrir':'Encerrar'?></button></form></div>
 <div class="stream" id="message-stream"><?php foreach(($data['messages']??[]) as $m): $mediaUrl=$m['media_id']?'/painel/midia?'.http_build_query(['account_id'=>$accountId,'wa_id'=>$waId,'id'=>$m['media_id']]):''; ?>
-<article class="bubble <?=$m['direction']==='outbound'?'out':''?>" data-message-id="<?=(int)$m['id']?>" data-direction="<?=consoleE($m['direction'])?>">
+<article class="bubble <?=$m['direction']==='outbound'?'out':''?>" data-message-id="<?=(int)$m['id']?>" data-direction="<?=consoleE($m['direction'])?>" data-status="<?=consoleE($m['status'])?>">
 <?php if($m['media_id']): ?>
 <?php if($m['message_type']==='image'): ?><button class="media-preview" type="button" data-media-open="image" data-media-src="<?=consoleE($mediaUrl)?>" aria-label="Ampliar imagem"><img src="<?=consoleE($mediaUrl)?>" alt="Imagem recebida" loading="lazy" decoding="async"></button>
 <?php elseif($m['message_type']==='sticker'): ?><img class="media-sticker" src="<?=consoleE($mediaUrl)?>" alt="Figurinha animada" loading="lazy" decoding="async">
@@ -162,11 +165,12 @@ header('X-Robots-Tag: noindex, nofollow');
 <?php if($page==='inbox'): ?><script>
 (function(){
   var rowsBox=document.querySelector('.convrows'),stream=document.getElementById('message-stream'),soundButton=document.getElementById('sound-toggle');
-  var accountSelect=document.getElementById('sidebar-account-filter'),feedback=document.getElementById('live-feedback');
+  var accountSelect=document.getElementById('sidebar-account-filter');
   if(!rowsBox)return;
   var params=new URLSearchParams(window.location.search),accountId=accountSelect?accountSelect.value:(params.get('account_id')||''),selectedWa=params.get('wa_id')||'';
   var seenMessages=new Set(Array.from(rowsBox.querySelectorAll('[data-message-id]')).map(function(row){return row.dataset.messageId;}));
   var conversationSignature='',messageSignature='',refreshing=false,sending=false;
+  var sendButton=null,sendButtonDefault='➤',sendButtonUnavailable=false,sendButtonState='ready',pendingDeliveryMessageId='';
   var knownMessageIds=new Set(Array.from(stream?stream.querySelectorAll('[data-message-id]'):[]).map(function(item){return item.dataset.messageId;}));
   var AudioContextType=window.AudioContext||window.webkitAudioContext,audioContext=null,audioReady=false,soundEnabled=true;
   try{soundEnabled=window.localStorage.getItem('zapapi-chat-sounds')!=='off';}catch(error){}
@@ -186,7 +190,21 @@ header('X-Robots-Tag: noindex, nofollow');
   function setAvatar(avatar,label,hasPhoto,waId){var state=hasPhoto?'1':'0',avatarLabel=label||waId||'?';if(avatar.dataset.photoState===state&&avatar.dataset.avatarLabel===avatarLabel)return;var samePhoto=avatar.dataset.photoState===state&&hasPhoto;avatar.dataset.photoState=state;avatar.dataset.avatarLabel=avatarLabel;var initial=Array.from(avatarLabel)[0].toLocaleUpperCase('pt-BR');if(samePhoto&&avatar.querySelector('img')){avatar.firstChild.nodeValue=initial;return;}avatar.replaceChildren(document.createTextNode(initial));if(!hasPhoto)return;var image=node('img');image.alt='';image.loading='lazy';image.src=contactPhotoUrl(waId);image.addEventListener('error',function(){image.remove();},{once:true});avatar.appendChild(image);}
   document.querySelectorAll('.avatar img').forEach(function(image){image.addEventListener('error',function(){image.remove();},{once:true});});
   function urlFor(waId){var url=new URL('/painel/conversas',window.location.origin);url.searchParams.set('account_id',accountId);if(waId)url.searchParams.set('wa_id',waId);if(params.get('q'))url.searchParams.set('q',params.get('q'));if(params.get('status'))url.searchParams.set('status',params.get('status'));return url.toString();}
-  function showFeedback(message,type){if(!feedback)return;feedback.hidden=!message;feedback.className='notice '+(type||'ok');feedback.textContent=message||'';}
+  function setSendButtonState(state,message){
+    if(!sendButton)return;sendButtonState=state;sendButton.classList.toggle('is-pending',state==='pending');sendButton.classList.toggle('is-error',state==='error');
+    if(state==='pending'){sendButton.disabled=true;sendButton.textContent='…';sendButton.setAttribute('aria-label','Aguardando a entrega da mensagem');sendButton.title=message||'Aguardando confirmação de entrega da Meta';return;}
+    sendButton.textContent=sendButtonDefault;
+    if(state==='error'){sendButton.disabled=sendButtonUnavailable;sendButton.setAttribute('aria-label','Falha no envio. Tentar novamente');sendButton.title=message||'Falha no envio. Revise e tente novamente.';return;}
+    sendButton.disabled=sendButtonUnavailable;sendButton.setAttribute('aria-label','Enviar mensagem');sendButton.title='Enviar mensagem';
+  }
+  function updatePendingDelivery(messages){
+    if(!sendButton||!pendingDeliveryMessageId)return;
+    var message=messages.find(function(item){return String(item.id||'')===pendingDeliveryMessageId;});if(!message)return;
+    if(message.status==='delivered'||message.status==='read'){pendingDeliveryMessageId='';setSendButtonState('ready');}
+    else if(message.status==='failed'){pendingDeliveryMessageId='';setSendButtonState('error','A Meta não entregou a mensagem. Você pode tentar novamente.');}
+    else if(message.status==='uncertain'){pendingDeliveryMessageId='';setSendButtonState('error','Não foi possível confirmar a entrega. Confira a conversa antes de reenviar.');}
+    else setSendButtonState('pending','Aguardando a entrega da mensagem…');
+  }
   function renderConversations(rows){
     var fragment=document.createDocumentFragment();
     if(!rows.length){var empty=node('div','empty');empty.appendChild(node('b','', 'Nenhuma conversa ainda'));empty.appendChild(document.createTextNode('Quando alguém enviar mensagem, a conversa aparece aqui.'));fragment.appendChild(empty);}
@@ -216,7 +234,7 @@ header('X-Robots-Tag: noindex, nofollow');
     var nearBottom=stream.scrollHeight-stream.scrollTop-stream.clientHeight<90,fragment=document.createDocumentFragment();
     var statusNames={accepted:'Enviada à Meta',sent:'Enviada',delivered:'Entregue',read:'Lida',failed:'Falhou',received:'Recebida'};
     if(!messages.length){var empty=node('div','empty');empty.appendChild(node('b','', 'Sem mensagens'));empty.appendChild(document.createTextNode('Envie um template aprovado para iniciar.'));fragment.appendChild(empty);}
-    messages.forEach(function(message){var bubble=node('article','bubble'+(message.direction==='outbound'?' out':''));bubble.dataset.messageId=String(message.id||'');bubble.dataset.direction=message.direction||'';
+    messages.forEach(function(message){var bubble=node('article','bubble'+(message.direction==='outbound'?' out':''));bubble.dataset.messageId=String(message.id||'');bubble.dataset.direction=message.direction||'';bubble.dataset.status=message.status||'';
       if(message.media_id){var src=conversationMediaUrl(message.media_id),type=message.message_type||'';
         if(type==='image'){var preview=node('button','media-preview');preview.type='button';preview.dataset.mediaOpen='image';preview.dataset.mediaSrc=src;preview.setAttribute('aria-label','Ampliar imagem');var image=node('img');image.src=src;image.alt='Imagem recebida';image.loading='lazy';image.decoding='async';preview.appendChild(image);bubble.appendChild(preview);}
         else if(type==='sticker'){var sticker=node('img','media-sticker');sticker.src=src;sticker.alt='Figurinha animada';sticker.loading='lazy';sticker.decoding='async';bubble.appendChild(sticker);}
@@ -248,27 +266,32 @@ header('X-Robots-Tag: noindex, nofollow');
       if(!selectedWa){var incoming=data.conversations.find(function(row){return row.direction==='inbound'&&!seenMessages.has(row.message_id);});if(incoming){playIncomingBell();window.setTimeout(function(){window.location.assign(urlFor(incoming.wa_id));},450);return;}}
       data.conversations.forEach(function(row){seenMessages.add(row.message_id);});
       var nextConversations=JSON.stringify(data.conversations);if(nextConversations!==conversationSignature){renderConversations(data.conversations);conversationSignature=nextConversations;}
-      if(selectedWa&&data.selected_wa_id===selectedWa&&data.contact&&stream){var headerAvatar=document.querySelector('.chathead .avatar');if(headerAvatar)setAvatar(headerAvatar,data.contact.display_name||selectedWa,data.contact.has_photo,selectedWa);var nextMessages=JSON.stringify(data.messages);if(nextMessages!==messageSignature){rememberMessages(data.messages);renderMessages(data.messages);messageSignature=nextMessages;}}
+      if(selectedWa&&data.selected_wa_id===selectedWa&&data.contact&&stream){var headerAvatar=document.querySelector('.chathead .avatar');if(headerAvatar)setAvatar(headerAvatar,data.contact.display_name||selectedWa,data.contact.has_photo,selectedWa);var nextMessages=JSON.stringify(data.messages);updatePendingDelivery(data.messages);if(nextMessages!==messageSignature){rememberMessages(data.messages);renderMessages(data.messages);messageSignature=nextMessages;}}
     }catch(error){console.warn('Atualização automática da conversa falhou.',error);}
     finally{refreshing=false;}
   }
   document.querySelectorAll('[data-quick-reply]').forEach(function(select){select.addEventListener('change',function(){if(this.value){var field=document.querySelector('.composer textarea');if(field){field.value=this.value;field.focus();}}});});
   var composer=document.querySelector('.composer'),composerText=composer&&composer.querySelector('textarea'),fileInput=composer&&composer.querySelector('input[type="file"]'),fileName=composer&&composer.querySelector('[data-file-name]'),emojiToggle=composer&&composer.querySelector('[data-emoji-toggle]'),emojiPicker=composer&&composer.querySelector('[data-emoji-picker]');
-  if(fileInput&&fileName)fileInput.addEventListener('change',function(){fileName.textContent=this.files&&this.files[0]?this.files[0].name:'';fileName.hidden=!fileName.textContent;});
+  sendButton=composer&&composer.querySelector('button[type="submit"]');sendButtonUnavailable=!!(sendButton&&sendButton.disabled);sendButtonDefault=sendButton?sendButton.textContent.trim():'➤';
+  if(sendButton){var initialOutgoing=stream?Array.from(stream.querySelectorAll('.bubble[data-direction="outbound"]')):[],lastOutgoing=initialOutgoing[initialOutgoing.length-1];if(lastOutgoing&&['accepted','sent'].includes(lastOutgoing.dataset.status)){pendingDeliveryMessageId=lastOutgoing.dataset.messageId;setSendButtonState('pending','Aguardando a entrega da última mensagem…');}else if(lastOutgoing&&(lastOutgoing.dataset.status==='failed'||lastOutgoing.dataset.status==='uncertain'))setSendButtonState('error','A última mensagem não foi confirmada como entregue.');else setSendButtonState('ready');}
+  function clearSendError(){if(sendButtonState==='error')setSendButtonState('ready');}
+  if(fileInput&&fileName)fileInput.addEventListener('change',function(){fileName.textContent=this.files&&this.files[0]?this.files[0].name:'';fileName.hidden=!fileName.textContent;clearSendError();});
   if(emojiToggle&&emojiPicker){emojiToggle.addEventListener('click',function(){var open=emojiPicker.hidden;emojiPicker.hidden=!open;emojiToggle.setAttribute('aria-expanded',String(open));});emojiPicker.addEventListener('click',function(event){var button=event.target.closest('[data-emoji]');if(!button||!composerText)return;var emoji=button.dataset.emoji,start=composerText.selectionStart,end=composerText.selectionEnd;composerText.setRangeText(emoji,start,end,'end');composerText.focus();emojiPicker.hidden=true;emojiToggle.setAttribute('aria-expanded','false');});document.addEventListener('pointerdown',function(event){if(!composer.contains(event.target)){emojiPicker.hidden=true;emojiToggle.setAttribute('aria-expanded','false');}});}
-  if(composerText)composerText.addEventListener('keydown',function(event){if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();var submitButton=composer.querySelector('button[type="submit"]');if(!submitButton||!submitButton.disabled){if(composer.requestSubmit)composer.requestSubmit();}}});
+  if(composerText){composerText.addEventListener('input',clearSendError);composerText.addEventListener('keydown',function(event){if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();var submitButton=composer.querySelector('button[type="submit"]');if(!submitButton||!submitButton.disabled){if(composer.requestSubmit)composer.requestSubmit();}}});}
   if(stream)stream.scrollTop=stream.scrollHeight;
   if(composer)composer.addEventListener('submit',async function(event){
-    event.preventDefault();if(sending)return;sending=true;var button=composer.querySelector('button[type="submit"]'),original=button?button.textContent:'Enviar →';if(button){button.disabled=true;button.textContent='Enviando…';}showFeedback('Enviando mensagem à Meta…','ok');
+    event.preventDefault();if(sending||!sendButton||sendButton.disabled)return;sending=true;setSendButtonState('pending','Enviando mensagem à Meta…');
     try{
       var response=await fetch(composer.getAttribute('action')||window.location.href,{method:'POST',body:new FormData(composer),credentials:'same-origin',cache:'no-store',headers:{'X-Requested-With':'XMLHttpRequest'}}),html=await response.text();
       if(new URL(response.url).pathname==='/entrar'){window.location.assign(response.url);return;}
       if(!response.ok){var parsed=new DOMParser().parseFromString(html,'text/html'),alert=parsed.querySelector('[role="alert"]');throw new Error(alert?alert.textContent.trim():'Não foi possível confirmar o envio.');}
       var parsedSuccess=new DOMParser().parseFromString(html,'text/html'),sendError=parsedSuccess.querySelector('[role="alert"]');if(sendError)throw new Error(sendError.textContent.trim());
-      var textarea=composer.querySelector('textarea'),file=composer.querySelector('input[type="file"]');if(textarea)textarea.value='';if(file)file.value='';if(fileName){fileName.textContent='';fileName.hidden=true;}showFeedback('Mensagem enviada à Meta. O status de entrega será atualizado automaticamente.','ok');
-      await refresh();
-    }catch(error){showFeedback(error.message||'Não foi possível enviar a mensagem. Confira o chat antes de tentar novamente.','bad');await refresh();}
-    finally{sending=false;if(button){button.disabled=false;button.textContent=original;}refresh();}
+      var outgoing=Array.from(parsedSuccess.querySelectorAll('#message-stream .bubble.out[data-message-id]')).reverse(),created=outgoing.find(function(item){return !knownMessageIds.has(item.dataset.messageId);});
+      if(!created){pendingDeliveryMessageId='';setSendButtonState('error','A Meta respondeu, mas não foi possível acompanhar a entrega no chat.');}
+      else {pendingDeliveryMessageId=created.dataset.messageId;updatePendingDelivery([{id:pendingDeliveryMessageId,status:created.dataset.status||'accepted'}]);}
+      var textarea=composer.querySelector('textarea'),file=composer.querySelector('input[type="file"]');if(textarea)textarea.value='';if(file)file.value='';if(fileName){fileName.textContent='';fileName.hidden=true;}
+    }catch(error){pendingDeliveryMessageId='';setSendButtonState('error',error.message||'Não foi possível enviar a mensagem. Revise e tente novamente.');}
+    finally{sending=false;refresh();}
   });
   refresh();setInterval(refresh,2000);document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')refresh();});
 })();
