@@ -50,6 +50,8 @@ CREATE TABLE whatsapp_contacts (
   account_id BIGINT UNSIGNED NOT NULL,
   wa_id VARCHAR(32) NOT NULL,
   display_name VARCHAR(255) DEFAULT NULL,
+  photo_data MEDIUMBLOB DEFAULT NULL,
+  photo_mime VARCHAR(40) DEFAULT NULL,
   opt_in_at DATETIME DEFAULT NULL,
   opt_in_source VARCHAR(255) DEFAULT NULL,
   last_inbound_at DATETIME DEFAULT NULL,

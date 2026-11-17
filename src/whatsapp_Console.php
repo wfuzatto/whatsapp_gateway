@@ -148,8 +148,55 @@ final class WhatsAppConsole {
     private static function flash(string $message,string $type='success'): void {
         $_SESSION['whatsapp_console_flash']=['message'=>$message,'type'=>$type];
     }
+    private static function ensureContactPhotoSchema(): void {
+        static $ready=false;
+        if($ready)return;
+        $columns=db()->query('SHOW COLUMNS FROM whatsapp_contacts')->fetchAll(PDO::FETCH_COLUMN,0);
+        foreach([
+            'photo_data'=>'MEDIUMBLOB DEFAULT NULL',
+            'photo_mime'=>'VARCHAR(40) DEFAULT NULL',
+        ] as $name=>$definition) {
+            if(in_array($name,$columns,true))continue;
+            try {db()->exec('ALTER TABLE whatsapp_contacts ADD COLUMN '.$name.' '.$definition);}
+            catch(PDOException $e) {if((int)($e->errorInfo[1]??0)!==1060)throw $e;}
+        }
+        $ready=true;
+    }
+    private static function contactPhotoUpload(array $file): ?array {
+        $error=(int)($file['error']??UPLOAD_ERR_NO_FILE);
+        if($error===UPLOAD_ERR_NO_FILE)return null;
+        if($error!==UPLOAD_ERR_OK||!is_uploaded_file((string)($file['tmp_name']??'')))
+            throw new HttpError('Não foi possível ler a foto selecionada.',422);
+        $tmp=(string)$file['tmp_name'];
+        $size=(int)($file['size']??0);
+        if($size<1||$size>2*1024*1024)throw new HttpError('A foto deve ter até 2 MB.',422);
+        $finfo=new finfo(FILEINFO_MIME_TYPE);$mime=(string)$finfo->file($tmp);
+        if(!in_array($mime,['image/jpeg','image/png','image/webp'],true)||@getimagesize($tmp)===false)
+            throw new HttpError('Escolha uma imagem JPEG, PNG ou WebP válida.',422);
+        $bytes=file_get_contents($tmp);
+        if(!is_string($bytes)||$bytes==='')throw new HttpError('Não foi possível ler a foto selecionada.',422);
+        return ['bytes'=>$bytes,'mime'=>$mime];
+    }
+    public static function contactPhotoUrl(int $accountId,string $waId): string {
+        return '/painel/foto-contato?'.http_build_query(['account_id'=>$accountId,'wa_id'=>$waId]);
+    }
+    private static function contactPhoto(array $user): never {
+        if(($_SERVER['REQUEST_METHOD']??'GET')!=='GET')throw new HttpError('Método não permitido.',405);
+        $tenantId=(int)$user['tenant_id'];$account=self::account($tenantId,(int)self::field($_GET,'account_id',20));
+        $waId=self::field($_GET,'wa_id',32);
+        if(!validPhone($waId))throw new HttpError('Contato inválido.',422);
+        $s=db()->prepare('SELECT photo_data,photo_mime FROM whatsapp_contacts WHERE tenant_id=? AND account_id=? AND wa_id=? LIMIT 1');
+        $s->execute([$tenantId,(int)$account['id'],$waId]);$row=$s->fetch();
+        if(!$row||!is_string($row['photo_mime']??null)||!in_array($row['photo_mime'],['image/jpeg','image/png','image/webp'],true))
+            throw new HttpError('Foto não encontrada.',404);
+        $bytes=$row['photo_data']??null;if(is_resource($bytes))$bytes=stream_get_contents($bytes);
+        if(!is_string($bytes)||$bytes==='')throw new HttpError('Foto não encontrada.',404);
+        header('Content-Type: '.$row['photo_mime']);header('Content-Length: '.strlen($bytes));
+        header('X-Content-Type-Options: nosniff');header('Cache-Control: private, no-store');
+        header('Content-Disposition: inline; filename="contact-photo"');echo $bytes;exit;
+    }
     private static function listConversations(int $tenantId,int $accountId,string $search,string $filter): array {
-        $sql='SELECT m.account_id,m.wa_id,a.name AS account_name,ct.display_name,ct.opt_in_at,ct.last_inbound_at,
+        $sql='SELECT m.account_id,m.wa_id,a.name AS account_name,ct.display_name,ct.photo_mime AS contact_photo_mime,ct.opt_in_at,ct.last_inbound_at,
             m.id AS message_id,m.direction,m.message_type,m.status AS message_status,m.payload,m.created_at,
             cv.status AS conversation_status,cv.closed_at
             FROM whatsapp_messages m
@@ -192,7 +239,7 @@ final class WhatsAppConsole {
             $payload=json_decode((string)$row['payload'],true);if(!is_array($payload))$payload=[];
             $row['text']=self::messagePreview((string)$row['payload'],(string)$row['message_type']);
             $row['media_id']=null;$type=(string)$row['message_type'];
-            if(in_array($type,['image','video','audio','document'],true)) {
+            if(in_array($type,['image','video','audio','document','sticker'],true)) {
                 $id=$payload[$type]['id']??null;if(is_string($id)&&validId($id))$row['media_id']=$id;
             }
             $row['caption']=$payload[$type]['caption']??'';
@@ -236,6 +283,7 @@ final class WhatsAppConsole {
             $items[]=[
                 'wa_id'=>(string)$row['wa_id'],
                 'display_name'=>(string)($row['display_name']??''),
+                'has_photo'=>!empty($row['contact_photo_mime']),
                 'preview'=>(string)$row['preview'],
                 'time_label'=>self::liveTime((string)$row['created_at'],'H:i'),
                 'closed'=>$closed,
@@ -247,7 +295,7 @@ final class WhatsAppConsole {
         $state=['status'=>'open','closed_at'=>null];$windowOpen=false;
         if($waId!==''&&$accountId) {
             if(!validPhone($waId))throw new HttpError('Número de conversa inválido.',422);
-            $s=db()->prepare('SELECT wa_id,display_name,last_inbound_at FROM whatsapp_contacts WHERE tenant_id=? AND account_id=? AND wa_id=? LIMIT 1');
+            $s=db()->prepare('SELECT wa_id,display_name,photo_mime,last_inbound_at FROM whatsapp_contacts WHERE tenant_id=? AND account_id=? AND wa_id=? LIMIT 1');
             $s->execute([$tenantId,$accountId,$waId]);$contact=$s->fetch()?:null;
             if($contact) {
                 $state=self::conversationsState($tenantId,$accountId,$waId);
@@ -270,7 +318,7 @@ final class WhatsAppConsole {
         foreach($accounts as $account)if((int)$account['id']===$accountId){$accountName=(string)$account['name'];break;}
         response(200,[
             'account_id'=>$accountId,'account_name'=>$accountName,
-            'selected_wa_id'=>$waId,'contact'=>$contact?['wa_id'=>(string)$contact['wa_id'],'display_name'=>(string)($contact['display_name']??'')]:null,
+            'selected_wa_id'=>$waId,'contact'=>$contact?['wa_id'=>(string)$contact['wa_id'],'display_name'=>(string)($contact['display_name']??''),'has_photo'=>!empty($contact['photo_mime'])]:null,
             'conversation_status'=>(string)($state['status']??'open'),'window_open'=>$windowOpen,
             'conversations'=>$items,'messages'=>$messages,
         ]);
@@ -310,7 +358,7 @@ final class WhatsAppConsole {
             $data['selected_wa_id']=$waId;$data['contact']=null;$data['messages']=[];
             $data['conversation_state']=['status'=>'open','closed_at'=>null];
             if($waId!==''&&$selected) {
-                $s=db()->prepare('SELECT wa_id,display_name,opt_in_at,opt_in_source,last_inbound_at
+                $s=db()->prepare('SELECT wa_id,display_name,photo_mime,opt_in_at,opt_in_source,last_inbound_at
                     FROM whatsapp_contacts WHERE tenant_id=? AND account_id=? AND wa_id=? LIMIT 1');
                 $s->execute([$tenantId,$selected,$waId]);$data['contact']=$s->fetch();
                 if(!$data['contact'])throw new HttpError('Conversa não encontrada nesta empresa.',404);
@@ -321,7 +369,7 @@ final class WhatsAppConsole {
             $s->execute([$tenantId]);$data['quick_replies']=$s->fetchAll();
         } elseif($page==='contacts') {
             $search=self::field($_GET,'q',100);$data['search']=$search;
-            $sql='SELECT id,account_id,wa_id,display_name,opt_in_at,opt_in_source,last_inbound_at FROM whatsapp_contacts WHERE tenant_id=?';$args=[$tenantId];
+            $sql='SELECT id,account_id,wa_id,display_name,photo_mime,opt_in_at,opt_in_source,last_inbound_at FROM whatsapp_contacts WHERE tenant_id=?';$args=[$tenantId];
             if($selected){$sql.=' AND account_id=?';$args[]=$selected;}
             if($search!==''){$sql.=' AND (wa_id LIKE ? OR display_name LIKE ?)';$args[]='%'.$search.'%';$args[]='%'.$search.'%';}
             $sql.=' ORDER BY COALESCE(last_inbound_at,created_at) DESC LIMIT 500';
@@ -363,14 +411,19 @@ final class WhatsAppConsole {
         $consent=($_POST['consent']??'')==='1';$source=self::field($_POST,'opt_in_source',255);
         if($consent&&strlen($source)<4)throw new HttpError('Registre a origem do consentimento (mínimo 4 caracteres).',422);
         $at=$consent?gmdate('Y-m-d H:i:s'):null;
-        $s=db()->prepare('INSERT INTO whatsapp_contacts(tenant_id,account_id,wa_id,display_name,opt_in_at,opt_in_source)
-            VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE
+        $photo=self::contactPhotoUpload($_FILES['photo']??[]);$removePhoto=($_POST['remove_photo']??'')==='1';
+        $photoSql=$photo?'photo_data=VALUES(photo_data),photo_mime=VALUES(photo_mime)':($removePhoto?'photo_data=NULL,photo_mime=NULL':'');
+        $photoColumns=$photo?',photo_data,photo_mime':'';$photoValues=$photo?',?,?':'';
+        $photoArgs=$photo?[$photo['bytes'],$photo['mime']]:[];
+        $photoUpdate=$photoSql!==''?','.$photoSql:'';
+        $s=db()->prepare('INSERT INTO whatsapp_contacts(tenant_id,account_id,wa_id,display_name,opt_in_at,opt_in_source'.$photoColumns.')
+            VALUES (?,?,?,?,?,?'.$photoValues.') ON DUPLICATE KEY UPDATE
             display_name=COALESCE(NULLIF(VALUES(display_name),""),display_name),
             opt_in_at=IF(VALUES(opt_in_at) IS NULL,opt_in_at,VALUES(opt_in_at)),
-            opt_in_source=IF(VALUES(opt_in_at) IS NULL,opt_in_source,VALUES(opt_in_source))');
-        $s->execute([$tenantId,$accountId,$waId,$name?:null,$at,$consent?$source:null]);
-        audit($accountId,$consent?'contact.optin':'contact.saved',['wa_id'=>$waId,'source'=>$consent?$source:null]);
-        self::flash($consent?'Contato salvo com consentimento registrado.':'Contato salvo. Sem consentimento, a plataforma não enviará templates ou campanhas.');
+            opt_in_source=IF(VALUES(opt_in_at) IS NULL,opt_in_source,VALUES(opt_in_source))'.$photoUpdate);
+        $s->execute(array_merge([$tenantId,$accountId,$waId,$name?:null,$at,$consent?$source:null],$photoArgs));
+        audit($accountId,$consent?'contact.optin':'contact.saved',['wa_id'=>$waId,'source'=>$consent?$source:null,'photo_updated'=>$photo!==null,'photo_removed'=>$removePhoto&&!$photo]);
+        self::flash($photo?'Contato e foto salvos. A imagem já aparece no chat.':($removePhoto?'Foto do contato removida.':($consent?'Contato salvo com consentimento registrado.':'Contato salvo. Sem consentimento, a plataforma não enviará templates ou campanhas.')));
         self::redirect('/painel/contatos?account_id='.$accountId);
     }
 
@@ -531,8 +584,9 @@ final class WhatsAppConsole {
         if(!validPhone($waId)||!validId($mediaId))throw new HttpError('Mídia inválida.',422);
         $s=db()->prepare("SELECT 1 FROM whatsapp_messages WHERE tenant_id=? AND account_id=? AND wa_id=? AND
             (JSON_UNQUOTE(JSON_EXTRACT(payload,'$.image.id'))=? OR JSON_UNQUOTE(JSON_EXTRACT(payload,'$.video.id'))=? OR
-             JSON_UNQUOTE(JSON_EXTRACT(payload,'$.audio.id'))=? OR JSON_UNQUOTE(JSON_EXTRACT(payload,'$.document.id'))=?) LIMIT 1");
-        $s->execute([$tenantId,$account['id'],$waId,$mediaId,$mediaId,$mediaId,$mediaId]);
+             JSON_UNQUOTE(JSON_EXTRACT(payload,'$.audio.id'))=? OR JSON_UNQUOTE(JSON_EXTRACT(payload,'$.document.id'))=? OR
+             JSON_UNQUOTE(JSON_EXTRACT(payload,'$.sticker.id'))=?) LIMIT 1");
+        $s->execute([$tenantId,$account['id'],$waId,$mediaId,$mediaId,$mediaId,$mediaId,$mediaId]);
         if(!$s->fetchColumn())throw new HttpError('Mídia não encontrada nesta conversa.',404);
         $meta=Graph::call($account,'GET',$mediaId);$url=(string)($meta['url']??'');$parts=parse_url($url);
         $host=strtolower((string)($parts['host']??''));
@@ -548,7 +602,7 @@ final class WhatsAppConsole {
         if(!is_string($bytes)||$status<200||$status>=300||strlen($bytes)>32*1024*1024)
             throw new HttpError('Não foi possível baixar a mídia da Meta.',502);
         $mime=strtolower(trim(explode(';',(string)($meta['mime_type']??'application/octet-stream'))[0]));
-        $allowed=['image/jpeg','image/png','video/mp4','video/3gpp','audio/aac','audio/mp4','audio/mpeg','audio/amr','audio/ogg','application/pdf'];
+        $allowed=['image/jpeg','image/png','image/webp','video/mp4','video/3gpp','audio/aac','audio/mp4','audio/mpeg','audio/amr','audio/ogg','application/pdf'];
         if(!in_array($mime,$allowed,true))$mime='application/octet-stream';
         header('Content-Type: '.$mime);header('Content-Length: '.strlen($bytes));header('X-Content-Type-Options: nosniff');
         header('Cache-Control: private, no-store');header('Content-Disposition: inline; filename="whatsapp-media"');
@@ -559,12 +613,18 @@ final class WhatsAppConsole {
         if($path==='/painel/conversas/atualizacoes') {
             try {
                 if($method!=='GET')throw new HttpError('Método não permitido.',405);
-                $user=self::user();self::liveUpdates($user);
+                $user=self::user();WhatsAppCampaigns::ensureSchema();self::ensureContactPhotoSchema();self::liveUpdates($user);
             } catch(HttpError $e) { response($e->httpStatus,['error'=>$e->getMessage()]); }
             catch(Throwable $e) {
                 error_log('WhatsApp live updates error: '.get_class($e));
                 response(503,['error'=>'Atualização da conversa indisponível.']);
             }
+        }
+        if($path==='/painel/foto-contato') {
+            try {$user=self::user();self::ensureContactPhotoSchema();self::contactPhoto($user);}
+            catch(HttpError $e){http_response_code($e->httpStatus);header('Content-Type: text/plain; charset=utf-8');header('Cache-Control: no-store');echo $e->getMessage();}
+            catch(Throwable $e){error_log('WhatsApp contact photo: '.get_class($e));http_response_code(503);echo 'Foto indisponível.';}
+            return true;
         }
         $pages=['/painel/conversas'=>'inbox','/painel/conversas/nova'=>'new','/painel/contatos'=>'contacts',
             '/painel/templates'=>'templates','/painel/campanhas'=>'campaigns','/painel/respostas-rapidas'=>'quick_replies'];
@@ -579,6 +639,7 @@ final class WhatsAppConsole {
         try {
             $user=self::user();
             WhatsAppCampaigns::ensureSchema();
+            self::ensureContactPhotoSchema();
             if($method==='POST') {
                 self::csrfCheck($_POST);$action=self::field($_POST,'action',40);
                 switch($action) {
