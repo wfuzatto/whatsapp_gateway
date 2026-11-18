@@ -525,6 +525,10 @@ final class WhatsAppConsole {
             VALUES (?,?,?,"open") ON DUPLICATE KEY UPDATE status="open",closed_at=NULL,updated_at=UTC_TIMESTAMP()')
             ->execute([$tenantId,$account['id'],$waId]);
         audit((int)$account['id'],'message.sent',['to'=>$waId,'type'=>$data['type']]);
+        if(self::expectsJson()) {
+            $messageId=$result['messages'][0]['id']??null;
+            response(201,['ok'=>true,'message'=>['id'=>is_string($messageId)?$messageId:'','status'=>'accepted']]);
+        }
         self::flash('Mensagem enviada à Meta.');
         self::redirect('/painel/conversas?account_id='.(int)$account['id'].'&wa_id='.rawurlencode($waId));
     }

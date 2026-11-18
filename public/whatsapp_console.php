@@ -320,13 +320,13 @@ header('X-Robots-Tag: noindex, nofollow');
   if(composer)composer.addEventListener('submit',async function(event){
     event.preventDefault();if(sending||!sendButton||sendButton.disabled)return;sending=true;setSendButtonState('pending','Enviando mensagem à Meta…');
     try{
-      var response=await fetch(composer.getAttribute('action')||window.location.href,{method:'POST',body:new FormData(composer),credentials:'same-origin',cache:'no-store',headers:{'X-Requested-With':'XMLHttpRequest'}}),html=await response.text();
+      var response=await fetch(composer.getAttribute('action')||window.location.href,{method:'POST',body:new FormData(composer),credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
       if(new URL(response.url).pathname==='/entrar'){window.location.assign(response.url);return;}
-      if(!response.ok){var parsed=new DOMParser().parseFromString(html,'text/html'),alert=parsed.querySelector('[role="alert"]');throw new Error(alert?alert.textContent.trim():'Não foi possível confirmar o envio.');}
-      var parsedSuccess=new DOMParser().parseFromString(html,'text/html'),sendError=parsedSuccess.querySelector('[role="alert"]');if(sendError)throw new Error(sendError.textContent.trim());
-      var outgoing=Array.from(parsedSuccess.querySelectorAll('#message-stream .bubble.out[data-message-id]')).reverse(),created=outgoing.find(function(item){return !knownMessageIds.has(item.dataset.messageId);});
-      if(!created){pendingDeliveryMessageId='';setSendButtonState('error','A Meta respondeu, mas não foi possível acompanhar a entrega no chat.');}
-      else {pendingDeliveryMessageId=created.dataset.messageId;updatePendingDelivery([{id:pendingDeliveryMessageId,status:created.dataset.status||'accepted'}]);}
+      var data;try{data=await response.json();}catch(parseError){throw new Error('Não foi possível confirmar o envio da mensagem.');}
+      if(!response.ok||!data.ok)throw new Error(data.error||'Não foi possível enviar a mensagem.');
+      pendingDeliveryMessageId=String(data.message&&data.message.id||'');
+      if(!pendingDeliveryMessageId)throw new Error('A Meta aceitou o envio, mas não retornou o identificador da mensagem. Confira o chat antes de tentar novamente.');
+      updatePendingDelivery([{id:pendingDeliveryMessageId,status:data.message.status||'accepted'}]);
       var textarea=composer.querySelector('textarea'),file=composer.querySelector('input[type="file"]');if(textarea)textarea.value='';if(file)file.value='';if(fileName){fileName.textContent='';fileName.hidden=true;}
     }catch(error){pendingDeliveryMessageId='';setSendButtonState('error',error.message||'Não foi possível enviar a mensagem. Revise e tente novamente.');}
     finally{sending=false;refresh();}
