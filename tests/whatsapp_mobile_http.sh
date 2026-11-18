@@ -26,12 +26,6 @@ foreach($profiles as $row) {
         message_type,status,payload) VALUES (?,?,?,'\''inbound'\'',?,'\''text'\'','\''received'\'',?)")
       ->execute([$tenant,$account,$from,"wamid.test.".$account,
         jsonString(["type"=>"text","text"=>["body"=>$body]])]);
-    if($email==="cliente1@portal-test.invalid") {
-        $p->prepare("INSERT INTO whatsapp_messages(tenant_id,account_id,wa_id,direction,whatsapp_id,
-            message_type,status,payload) VALUES (?,?,?,'\''inbound'\'',?,'\''image'\'','\''received'\'',?)")
-          ->execute([$tenant,$account,$from,"wamid.media.test.".$account,
-            jsonString(["type"=>"image","image"=>["id"=>"invalid-media-id"]])]);
-    }
 }
 '
 php -S 127.0.0.1:18884 -t public public/whatsapp_index.php > "$tmp/http.log" 2>&1 &
@@ -66,8 +60,20 @@ code="$(curl -sS -o "$tmp/denied" -w '%{http_code}' -H "Authorization: Bearer $t
  "$base/conversations/$idA/messages")"
 [[ "$code" == 404 ]] || { echo "Vazamento entre tenants: HTTP $code"; exit 1; }
 echo "OK: bloqueio de ID de conversa estrangeiro"
-curl -fsS -H "Authorization: Bearer $token1" "$base/conversations/$idA/messages" -o "$tmp/messages.json"
-media_message_id="$(python3 -c 'import json,sys; rows=json.load(open(sys.argv[1]))["data"]; print(next(row["id"] for row in rows if row["message_type"]=="image"))' "$tmp/messages.json")"
+media_message_id="$(python3 -c 'import json,sys; row=json.load(open(sys.argv[1]))["data"][0]; print(row["account_id"],row["phone"])' "$tmp/a.json" | {
+  read -r account_id phone
+  php -r '
+    require "src/whatsapp_bootstrap.php";
+    $p=db();$s=$p->prepare("SELECT tenant_id FROM whatsapp_accounts WHERE id=?");
+    $s->execute([(int)$argv[1]]);$tenant=$s->fetchColumn();
+    if(!$tenant)throw new RuntimeException("Media test account missing");
+    $p->prepare("INSERT INTO whatsapp_messages(tenant_id,account_id,wa_id,direction,whatsapp_id,message_type,status,payload)
+      VALUES (?,?,?,?,?,?,?,?)")
+      ->execute([$tenant,(int)$argv[1],$argv[2],"inbound","wamid.media.test.".$argv[1],"image","received",
+        jsonString(["type"=>"image","image"=>["id"=>"invalid-media-id"]])]);
+    echo $p->lastInsertId();
+  ' "$account_id" "$phone"
+})"
 code="$(curl -sS -o "$tmp/media_method" -w '%{http_code}' -X POST \
   -H "Authorization: Bearer $token1" "$base/media/$media_message_id")"
 [[ "$code" == 405 ]] || { echo "Rota de mídia não tratou o método POST: HTTP $code"; cat "$tmp/media_method"; exit 1; }
