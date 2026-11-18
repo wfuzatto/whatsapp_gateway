@@ -150,6 +150,56 @@ final class WhatsAppMobile {
         return $timestamp!==null && strtotime($timestamp.' UTC')!==false &&
                strtotime($timestamp.' UTC')>=time()-86400;
     }
+    private static function downloadMedia(array $ctx,string $messageId): never {
+        if(($_SERVER['REQUEST_METHOD']??'GET')!=='GET')throw new HttpError('Método não permitido.',405);
+        if(!validId($messageId))throw new HttpError('Mídia inválida.',422);
+
+        // O app fornece o ID local da mensagem; o media ID da Meta vem do payload do tenant.
+        $s=db()->prepare('SELECT m.message_type,m.payload,a.*
+            FROM whatsapp_messages m JOIN whatsapp_accounts a
+              ON a.id=m.account_id AND a.tenant_id=m.tenant_id
+            WHERE m.id=? AND m.tenant_id=? AND a.status="active" LIMIT 1');
+        $s->execute([$messageId,$ctx['tenant_id']]);$row=$s->fetch();
+        if(!$row)throw new HttpError('Mídia não encontrada nesta empresa.',404);
+
+        $payload=json_decode((string)$row['payload'],true);
+        if(!is_array($payload))throw new HttpError('Dados da mídia indisponíveis.',404);
+        $type=strtolower((string)$row['message_type']);
+        if(!in_array($type,['image','video','audio','document','sticker'],true))
+            $type=strtolower((string)($payload['type']??''));
+        if(!in_array($type,['image','video','audio','document','sticker'],true))
+            throw new HttpError('Esta mensagem não contém mídia compatível.',404);
+        $media=$payload[$type]??null;$mediaId=is_array($media)?($media['id']??null):null;
+        if(!is_string($mediaId)||!validId($mediaId))throw new HttpError('Identificador da mídia indisponível.',404);
+
+        $meta=Graph::call($row,'GET',$mediaId);$url=(string)($meta['url']??'');$parts=parse_url($url);
+        $host=strtolower((string)($parts['host']??''));
+        if(!$parts||($parts['scheme']??'')!=='https'||!$host||
+            !($host==='lookaside.fbsbx.com'||str_ends_with($host,'.fbcdn.net')||str_ends_with($host,'.fbsbx.com')))
+            throw new HttpError('A Meta retornou uma URL de mídia inválida.',502);
+
+        $ch=curl_init($url);if($ch===false)throw new HttpError('Mídia indisponível.',502);
+        curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>10,CURLOPT_TIMEOUT=>45,
+            CURLOPT_FOLLOWLOCATION=>false,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2,
+            CURLOPT_HTTPHEADER=>['Authorization: Bearer '.unseal($row['token_box']),'Accept: */*'],
+            CURLOPT_MAXFILESIZE=>32*1024*1024]);
+        $bytes=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_RESPONSE_CODE);
+        $downloadMime=(string)curl_getinfo($ch,CURLINFO_CONTENT_TYPE);curl_close($ch);
+        if(!is_string($bytes)||$status<200||$status>=300||strlen($bytes)>32*1024*1024)
+            throw new HttpError('Não foi possível baixar a mídia da Meta.',502);
+
+        $metaMime=trim((string)($meta['mime_type']??''));
+        $mime=strtolower(trim(explode(';',$metaMime!==''?$metaMime:$downloadMime)[0]));
+        $allowed=['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/3gpp',
+            'audio/aac','audio/mp4','audio/mpeg','audio/amr','audio/ogg','audio/opus',
+            'application/ogg','application/pdf'];
+        if(!in_array($mime,$allowed,true))$mime='application/octet-stream';
+        header('Content-Type: '.$mime);header('Content-Length: '.strlen($bytes));
+        header('X-Content-Type-Options: nosniff');header('Cache-Control: private, max-age=86400');
+        header('Vary: Authorization');header_remove('Pragma');
+        header('Content-Disposition: inline; filename="whatsapp-media"');
+        echo $bytes;exit;
+    }
     private static function messages(array $ctx,string $id): never {
         [$account,$phone]=self::conversation($ctx,$id);
         $s=db()->prepare("SELECT id,direction,status,message_type,payload,created_at
@@ -350,6 +400,8 @@ final class WhatsAppMobile {
             if($method==='GET')self::messages($ctx,$matches[1]);
             if($method==='POST')self::sendText($ctx,$matches[1]);
         }
+        if(preg_match('~^/media/([0-9]{1,20})$~D',$route,$matches))
+            self::downloadMedia($ctx,$matches[1]);
         if(preg_match('~^/conversations/([0-9]+-[0-9]{7,20})/templates$~D',$route,$matches)
             && $method==='POST')self::sendTemplate($ctx,$matches[1]);
         throw new HttpError('Endpoint móvel não encontrado.',404);

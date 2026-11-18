@@ -133,6 +133,7 @@ A V1 expõe uma API de aplicativo em `/mobile-api/v1/` que é **independente do 
 - `POST /mobile-api/v1/auth/logout` — revoga a sessão e remove registro de dispositivo.
 - `GET /mobile-api/v1/me`, `GET /mobile-api/v1/accounts`, `GET|POST /mobile-api/v1/conversations`.
 - `GET|POST /mobile-api/v1/conversations/{account_id}-{phone}/messages` — conversa restrita ao tenant. Texto livre apenas dentro da janela de atendimento de 24 horas, verificada no servidor.
+- `GET /mobile-api/v1/media/{message_id}` — entrega imagem, áudio, vídeo, documento ou sticker de uma mensagem do próprio tenant, com o token Meta mantido no servidor.
 - `GET /mobile-api/v1/templates?account_id=...` — templates aprovados; `POST /mobile-api/v1/conversations/{id}/templates` — somente template aprovado e contato com consentimento registrado.
 - `POST /mobile-api/v1/devices` — armazena token FCM cifrado; envio de pushes exige serviço FCM do backend, ainda separado.
 - `GET /mobile-api/v1/contacts` — contatos autorizados do tenant.

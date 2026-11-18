@@ -26,6 +26,12 @@ foreach($profiles as $row) {
         message_type,status,payload) VALUES (?,?,?,'\''inbound'\'',?,'\''text'\'','\''received'\'',?)")
       ->execute([$tenant,$account,$from,"wamid.test.".$account,
         jsonString(["type"=>"text","text"=>["body"=>$body]])]);
+    if($email==="cliente1@portal-test.invalid") {
+        $p->prepare("INSERT INTO whatsapp_messages(tenant_id,account_id,wa_id,direction,whatsapp_id,
+            message_type,status,payload) VALUES (?,?,?,'\''inbound'\'',?,'\''image'\'','\''received'\'',?)")
+          ->execute([$tenant,$account,$from,"wamid.media.test.".$account,
+            jsonString(["type"=>"image","image"=>["id"=>"invalid-media-id"]])]);
+    }
 }
 '
 php -S 127.0.0.1:18884 -t public public/whatsapp_index.php > "$tmp/http.log" 2>&1 &
@@ -60,6 +66,24 @@ code="$(curl -sS -o "$tmp/denied" -w '%{http_code}' -H "Authorization: Bearer $t
  "$base/conversations/$idA/messages")"
 [[ "$code" == 404 ]] || { echo "Vazamento entre tenants: HTTP $code"; exit 1; }
 echo "OK: bloqueio de ID de conversa estrangeiro"
+curl -fsS -H "Authorization: Bearer $token1" "$base/conversations/$idA/messages" -o "$tmp/messages.json"
+media_message_id="$(python3 -c 'import json,sys; rows=json.load(open(sys.argv[1]))["data"]; print(next(row["id"] for row in rows if row["message_type"]=="image"))' "$tmp/messages.json")"
+code="$(curl -sS -o "$tmp/media_method" -w '%{http_code}' -X POST \
+  -H "Authorization: Bearer $token1" "$base/media/$media_message_id")"
+[[ "$code" == 405 ]] || { echo "Rota de mídia não tratou o método POST: HTTP $code"; cat "$tmp/media_method"; exit 1; }
+echo "OK: rota de mídia exige GET"
+code="$(curl -sS -o "$tmp/media_foreign" -w '%{http_code}' \
+  -H "Authorization: Bearer $token2" "$base/media/$media_message_id")"
+[[ "$code" == 404 ]] && grep -q 'Mídia não encontrada nesta empresa' "$tmp/media_foreign" || {
+  echo "Rota de mídia não isolou tenant: HTTP $code"; cat "$tmp/media_foreign"; exit 1;
+}
+echo "OK: mídia de outro tenant não é acessível"
+code="$(curl -sS -o "$tmp/media_invalid" -w '%{http_code}' \
+  -H "Authorization: Bearer $token1" "$base/media/$media_message_id")"
+[[ "$code" == 404 ]] && grep -q 'Identificador da mídia indisponível' "$tmp/media_invalid" || {
+  echo "Rota de mídia não validou o media ID: HTTP $code"; cat "$tmp/media_invalid"; exit 1;
+}
+echo "OK: validação do identificador Meta antes do download"
 idNew="$(curl -fsS -H "Authorization: Bearer $token1" \
  -H 'Content-Type: application/json' -d '{"phone":"5511999933333"}' \
  "$base/conversations" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')"
