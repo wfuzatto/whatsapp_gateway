@@ -200,7 +200,7 @@ header('X-Robots-Tag: noindex, nofollow');
   if(!rowsBox)return;
   var params=new URLSearchParams(window.location.search),accountId=accountSelect?accountSelect.value:(params.get('account_id')||''),selectedWa=params.get('wa_id')||'';
   var seenMessages=new Set(Array.from(rowsBox.querySelectorAll('[data-message-id]')).map(function(row){return row.dataset.messageId;}));
-  var conversationSignature='',messageSignature='',refreshing=false,sending=false;
+  var conversationSignature='',messageSignature='',refreshing=false,sending=false,lastAcknowledgedInboundId=0;
   var sendButton=null,sendButtonDefault='➤',sendButtonUnavailable=false,sendButtonState='ready',trackedDeliveryMessageId='';
   var knownMessageIds=new Set(Array.from(stream?stream.querySelectorAll('[data-message-id]'):[]).map(function(item){return item.dataset.messageId;}));
   var AudioContextType=window.AudioContext||window.webkitAudioContext,audioContext=null,audioReady=false,soundEnabled=true;
@@ -304,7 +304,10 @@ header('X-Robots-Tag: noindex, nofollow');
       if(!selectedWa){var incoming=data.conversations.find(function(row){return row.direction==='inbound'&&!seenMessages.has(row.message_id);});if(incoming){playIncomingBell();window.setTimeout(function(){window.location.assign(urlFor(incoming.wa_id));},450);return;}}
       data.conversations.forEach(function(row){seenMessages.add(row.message_id);});
       var nextConversations=JSON.stringify(data.conversations);if(nextConversations!==conversationSignature){renderConversations(data.conversations);conversationSignature=nextConversations;}
-      if(selectedWa&&data.selected_wa_id===selectedWa&&data.contact&&stream){var headerAvatar=document.querySelector('.chathead .avatar');if(headerAvatar)setAvatar(headerAvatar,data.contact.display_name||selectedWa,data.contact.has_photo,selectedWa,data.contact.photo_version);var nextMessages=JSON.stringify(data.messages);updateTrackedDelivery(data.messages);if(nextMessages!==messageSignature){rememberMessages(data.messages);renderMessages(data.messages);messageSignature=nextMessages;}}
+      if(selectedWa&&data.selected_wa_id===selectedWa&&data.contact&&stream){var headerAvatar=document.querySelector('.chathead .avatar');if(headerAvatar)setAvatar(headerAvatar,data.contact.display_name||selectedWa,data.contact.has_photo,selectedWa,data.contact.photo_version);var nextMessages=JSON.stringify(data.messages);updateTrackedDelivery(data.messages);if(nextMessages!==messageSignature){rememberMessages(data.messages);renderMessages(data.messages);messageSignature=nextMessages;}
+        var latestInboundId=data.messages.reduce(function(latest,message){return message.direction==='inbound'?Math.max(latest,Number(message.id)||0):latest;},0);
+        if(latestInboundId>lastAcknowledgedInboundId){var csrfField=document.querySelector('input[name="csrf"]');if(csrfField){var readForm=new URLSearchParams({csrf:csrfField.value,account_id:String(accountId),wa_id:selectedWa});try{var readResponse=await fetch('/painel/conversas/marcar-lida',{method:'POST',body:readForm,credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});if(readResponse.ok){var readResult=await readResponse.json();lastAcknowledgedInboundId=Math.max(latestInboundId,Number(readResult.read_through_id)||0);}}catch(readError){console.warn('Sincronização de leitura com o app falhou.',readError);}}}
+      }
     }catch(error){console.warn('Atualização automática da conversa falhou.',error);}
     finally{refreshing=false;}
   }

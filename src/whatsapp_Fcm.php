@@ -7,6 +7,7 @@ final class WhatsAppFcm {
     private const PROJECT_ID='zapapi-ffc8b';
     private const TOKEN_URL='https://oauth2.googleapis.com/token';
     private static bool $schemaReady=false;
+    private static bool $readCursorSchemaReady=false;
     private static ?string $accessToken=null;
     private static int $accessTokenExpiresAt=0;
 
@@ -31,6 +32,84 @@ final class WhatsAppFcm {
           FOREIGN KEY (tenant_id,account_id) REFERENCES whatsapp_accounts(tenant_id,id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         self::$schemaReady=true;
+    }
+
+    public static function ensureReadCursorSchema(): void {
+        if(self::$readCursorSchemaReady)return;
+        db()->exec("CREATE TABLE IF NOT EXISTS whatsapp_conversation_read_cursors (
+          tenant_id BIGINT UNSIGNED NOT NULL,
+          account_id BIGINT UNSIGNED NOT NULL,
+          wa_id VARCHAR(32) NOT NULL,
+          last_read_message_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (tenant_id,account_id,wa_id),
+          INDEX idx_mobile_read_cursor_updated (tenant_id,updated_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        self::$readCursorSchemaReady=true;
+    }
+
+    public static function readCursorsForTenant(int $tenantId): array {
+        if($tenantId<1)return [];
+        self::ensureReadCursorSchema();
+        $s=db()->prepare('SELECT account_id,wa_id,last_read_message_id
+            FROM whatsapp_conversation_read_cursors WHERE tenant_id=?');
+        $s->execute([$tenantId]);$result=[];
+        foreach($s->fetchAll() as $row)
+            $result[(int)$row['account_id'].'-'.(string)$row['wa_id']]=(string)$row['last_read_message_id'];
+        return $result;
+    }
+
+    public static function markConversationRead(int $tenantId,int $accountId,string $waId): int {
+        if($tenantId<1||$accountId<1||!validPhone($waId))throw new HttpError('Conversa inválida.',422);
+        self::ensureReadCursorSchema();
+        $pdo=db();$pdo->beginTransaction();
+        try{
+            $pdo->prepare('INSERT IGNORE INTO whatsapp_conversation_read_cursors
+                (tenant_id,account_id,wa_id,last_read_message_id) VALUES (?,?,?,0)')
+                ->execute([$tenantId,$accountId,$waId]);
+            $cursorQuery=$pdo->prepare('SELECT last_read_message_id FROM whatsapp_conversation_read_cursors
+                WHERE tenant_id=? AND account_id=? AND wa_id=? FOR UPDATE');
+            $cursorQuery->execute([$tenantId,$accountId,$waId]);
+            $previous=(int)$cursorQuery->fetchColumn();
+            $latestQuery=$pdo->prepare("SELECT COALESCE(MAX(id),0) FROM whatsapp_messages
+                WHERE tenant_id=? AND account_id=? AND wa_id=? AND direction='inbound'");
+            $latestQuery->execute([$tenantId,$accountId,$waId]);
+            $through=max($previous,(int)$latestQuery->fetchColumn());
+            if($through>$previous){
+                $pdo->prepare('UPDATE whatsapp_conversation_read_cursors SET last_read_message_id=?,updated_at=UTC_TIMESTAMP()
+                    WHERE tenant_id=? AND account_id=? AND wa_id=?')
+                    ->execute([$through,$tenantId,$accountId,$waId]);
+            }
+            $pdo->commit();
+        }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
+        if($through>$previous)self::broadcastReadCursor($tenantId,$accountId,$waId,$through);
+        return $through;
+    }
+
+    private static function broadcastReadCursor(int $tenantId,int $accountId,string $waId,int $through): void {
+        if(!self::credentialsAvailable())return;
+        try{$accessToken=self::accessToken(self::serviceAccount());}
+        catch(Throwable $e){error_log('WhatsApp FCM read-sync setup failed: '.get_class($e));return;}
+        try{
+            $s=db()->prepare("SELECT d.id,d.token_box FROM whatsapp_mobile_devices d
+                JOIN whatsapp_mobile_sessions ms ON ms.id=d.session_id AND ms.tenant_id=d.tenant_id AND ms.user_id=d.user_id
+                JOIN whatsapp_tenants t ON t.id=d.tenant_id AND t.status='active'
+                LEFT JOIN whatsapp_subscriptions sub ON sub.tenant_id=d.tenant_id
+                WHERE d.tenant_id=? AND ms.revoked_at IS NULL AND ms.expires_at>UTC_TIMESTAMP()
+                  AND (sub.id IS NULL OR sub.status='active')");
+            $s->execute([$tenantId]);
+            foreach($s->fetchAll() as $device){
+                try{$token=unseal((string)$device['token_box']);}
+                catch(Throwable $e){db()->prepare('DELETE FROM whatsapp_mobile_devices WHERE id=?')->execute([$device['id']]);continue;}
+                $result=self::sendDataMessage($accessToken,$token,[
+                    'type'=>'conversation_read','conversation_id'=>$accountId.'-'.$waId,
+                    'read_through_id'=>(string)$through
+                ],2419200);
+                if(!$result['ok']&&(($result['status']??0)===404||($result['error_code']??'')==='UNREGISTERED'))
+                    db()->prepare('DELETE FROM whatsapp_mobile_devices WHERE id=?')->execute([$device['id']]);
+                elseif(!$result['ok'])error_log('WhatsApp FCM read-sync send failed with HTTP '.(int)($result['status']??0));
+            }
+        }catch(Throwable $e){error_log('WhatsApp FCM read-sync devices lookup failed: '.get_class($e));}
     }
 
     public static function enqueue(PDO $pdo,int $tenantId,int $accountId,int $messageId,string $waId): int {
@@ -178,23 +257,20 @@ final class WhatsAppFcm {
     }
 
     private static function send(string $accessToken,string $deviceToken,array $job): array {
+        return self::sendDataMessage($accessToken,$deviceToken,[
+            'type'=>'new_message',
+            'conversation_id'=>$job['account_id'].'-'.$job['wa_id'],
+            'message_id'=>(string)$job['message_id'],
+            'sender'=>(string)$job['notification_sender'],
+            'preview'=>(string)$job['notification_preview']
+        ]);
+    }
+
+    private static function sendDataMessage(string $accessToken,string $deviceToken,array $data,int $ttlSeconds=3600): array {
         $body=['message'=>[
             'token'=>$deviceToken,
-            'data'=>[
-                'type'=>'new_message',
-                'conversation_id'=>$job['account_id'].'-'.$job['wa_id'],
-                'message_id'=>(string)$job['message_id'],
-                'sender'=>(string)$job['notification_sender'],
-                'preview'=>(string)$job['notification_preview']
-            ],
-            'notification'=>[
-                'title'=>(string)$job['notification_sender'],
-                'body'=>(string)$job['notification_preview']
-            ],
-            'android'=>[
-                'priority'=>'HIGH','ttl'=>'3600s',
-                'notification'=>['channel_id'=>'messages']
-            ]
+            'data'=>$data,
+            'android'=>['priority'=>'HIGH','ttl'=>max(0,min(2419200,$ttlSeconds)).'s']
         ]];
         $url='https://fcm.googleapis.com/v1/projects/'.self::PROJECT_ID.'/messages:send';
         $ch=curl_init($url);

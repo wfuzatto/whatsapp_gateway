@@ -6,6 +6,7 @@ require_once __DIR__.'/whatsapp_Rules.php';
 require_once __DIR__.'/whatsapp_Jobs.php';
 require_once __DIR__.'/whatsapp_Portal.php';
 require_once __DIR__.'/whatsapp_Campaigns.php';
+require_once __DIR__.'/whatsapp_Fcm.php';
 
 final class WhatsAppConsole {
     private static function redirect(string $path): never { header('Location: '.$path,true,303);exit; }
@@ -644,6 +645,23 @@ final class WhatsAppConsole {
     }
 
     public static function route(string $path,string $method): bool {
+        if($path==='/painel/conversas/marcar-lida') {
+            try {
+                if($method!=='POST')throw new HttpError('Método não permitido.',405);
+                $user=self::user();self::active($user);self::csrfCheck($_POST);
+                $tenantId=(int)$user['tenant_id'];
+                $accountId=(int)self::field($_POST,'account_id',20);
+                $waId=self::field($_POST,'wa_id',32);
+                self::account($tenantId,$accountId);
+                if(!validPhone($waId))throw new HttpError('Número de conversa inválido.',422);
+                $through=WhatsAppFcm::markConversationRead($tenantId,$accountId,$waId);
+                response(200,['ok'=>true,'read_through_id'=>(string)$through]);
+            } catch(HttpError $e) { response($e->httpStatus,['error'=>$e->getMessage()]); }
+            catch(Throwable $e) {
+                error_log('WhatsApp mark conversation read error: '.get_class($e));
+                response(503,['error'=>'Não foi possível sincronizar a leitura agora.']);
+            }
+        }
         if($path==='/painel/conversas/atualizacoes') {
             try {
                 if($method!=='GET')throw new HttpError('Método não permitido.',405);

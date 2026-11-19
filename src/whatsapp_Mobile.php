@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__.'/whatsapp_bootstrap.php';
 require_once __DIR__.'/whatsapp_Graph.php';
 require_once __DIR__.'/whatsapp_Rules.php';
+require_once __DIR__.'/whatsapp_Fcm.php';
 
 final class WhatsAppMobile {
     private const PREFIX='/mobile-api/v1';
@@ -134,6 +135,7 @@ final class WhatsAppMobile {
                     WHERE x.tenant_id=m.tenant_id AND x.account_id=m.account_id AND x.wa_id=m.wa_id)
              ORDER BY m.id DESC LIMIT 120");
         $s->execute([$tenant]);$rows=$s->fetchAll();
+        $readCursors=WhatsAppFcm::readCursorsForTenant($tenant);
         // Fotos pertencem ao contato dentro do tenant. Em empresas com vários
         // números, o mesmo contato pode ter sido cadastrado em outra conta.
         $phones=array_values(array_unique(array_filter(
@@ -172,6 +174,7 @@ final class WhatsAppMobile {
                 'window_open'=>self::hasWindow($row['last_inbound_at']),
                 'has_photo'=>$photo!==null,
                 'photo_version'=>(string)($photo['photo_version']??''),
+                'read_through_id'=>$readCursors[(int)$row['account_id'].'-'.(string)$row['wa_id']]??'0',
                 'unread_count'=>0];
         }
         response(200,['data'=>$result]);
@@ -473,6 +476,12 @@ final class WhatsAppMobile {
         if($route==='/conversations'){
             if($method==='GET')self::listConversations($ctx);
             if($method==='POST')self::createConversation($ctx);
+        }
+        if(preg_match('~^/conversations/([0-9]+-[0-9]{7,20})/read$~D',$route,$matches)
+            &&$method==='POST'){
+            [$account,$phone]=self::conversation($ctx,$matches[1]);
+            $through=WhatsAppFcm::markConversationRead((int)$ctx['tenant_id'],(int)$account['id'],$phone);
+            response(200,['ok'=>true,'read_through_id'=>(string)$through]);
         }
         if(preg_match('~^/contacts/([1-9][0-9]*-[0-9]{7,20})/photo$~D',$route,$matches))
             self::contactPhoto($ctx,$matches[1]);
