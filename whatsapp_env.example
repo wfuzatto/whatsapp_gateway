@@ -15,6 +15,11 @@ META_APP_ID=ALTERE
 # App secret da Meta; nunca use o access token como app secret.
 META_APP_SECRET=ALTERE
 META_VERIFY_TOKEN=ALTERE_TOKEN_ALEATORIO
+# FCM HTTP v1 (Firebase project used by the Android app).
+# Keep the service account JSON outside public_html; blank path uses the
+# account-root file whatsapp_firebase_service_account.json automatically.
+FCM_PROJECT_ID=zapapi-ffc8b
+FCM_SERVICE_ACCOUNT_FILE=
 # Banco remoto DBaaS: confirme conectividade a partir da hospedagem do PHP.
 # A senha real nao deve ser adicionada ao Git nem ao arquivo de exemplo.
 # Limite do corpo JSON: 4 MB; maximo upload: 100 MB (ver limites do PHP e Meta).

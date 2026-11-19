@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/whatsapp_bootstrap.php';
+require_once __DIR__ . '/whatsapp_Fcm.php';
 
 final class Webhook {
     public static function verifySubscription(array $query): string {
@@ -26,6 +27,8 @@ final class Webhook {
             !isset($body['entry']) || !is_array($body['entry'])) throw new HttpError('Unexpected webhook object');
         $pdo = db();
         $saved = 0;
+        $pushJobIds=[];
+        WhatsAppFcm::ensureSchema();
         $pdo->beginTransaction();
         try {
             foreach ($body['entry'] as $entry) {
@@ -48,7 +51,7 @@ final class Webhook {
                     if ($stmt->rowCount() === 0) continue; // Meta pode enviar novamente o mesmo evento
                     $saved++;
                     if ($accountId !== null) {
-                        self::updateIncoming($pdo, $tenantId, $accountId, $value);
+                        self::updateIncoming($pdo, $tenantId, $accountId, $value, $pushJobIds);
                         if (!empty($account['callback_url']) && !empty($account['callback_secret_box'])) {
                             $stmt = $pdo->prepare('INSERT IGNORE INTO whatsapp_jobs(tenant_id,account_id,kind,idempotency_key,payload)
                                                    VALUES (?,?,"callback",?,?)');
@@ -65,9 +68,18 @@ final class Webhook {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e; // A Meta deve repetir: jamais confirmar evento não gravado
         }
+        if($pushJobIds&&function_exists('fastcgi_finish_request')){
+            register_shutdown_function(static function() use($pushJobIds): void {
+                fastcgi_finish_request();
+                foreach($pushJobIds as $pushJobId){
+                    try{$job=WhatsAppFcm::claim((int)$pushJobId);if($job)WhatsAppFcm::process($job);}
+                    catch(Throwable $e){error_log('WhatsApp FCM background delivery failed: '.get_class($e));}
+                }
+            });
+        }
         return ['accepted'=>true,'events_saved'=>$saved];
     }
-    private static function updateIncoming(PDO $pdo, int $tenantId, int $accountId, array $value): void {
+    private static function updateIncoming(PDO $pdo, int $tenantId, int $accountId, array $value,array &$pushJobIds): void {
         $names = [];
         foreach (($value['contacts'] ?? []) as $contact) {
             $waId = (string)($contact['wa_id'] ?? '');
@@ -90,6 +102,11 @@ final class Webhook {
             $s = $pdo->prepare('INSERT IGNORE INTO whatsapp_messages(tenant_id,account_id,wa_id,direction,whatsapp_id,message_type,status,payload)
                 VALUES (?,?,?,"inbound",?,?,"received",?)');
             $s->execute([$tenantId,$accountId,$from,$waMessageId,substr((string)($message['type'] ?? 'unknown'),0,40),jsonString($message)]);
+            if($s->rowCount()===1){
+                $messageId=(int)$pdo->lastInsertId();
+                $pushJobId=WhatsAppFcm::enqueue($pdo,$tenantId,$accountId,$messageId,$from);
+                if($pushJobId>0)$pushJobIds[]=$pushJobId;
+            }
         }
         foreach (($value['statuses'] ?? []) as $st) {
             if (!is_array($st) || empty($st['id']) || empty($st['status'])) continue;

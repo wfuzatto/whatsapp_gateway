@@ -79,6 +79,11 @@ ok(Webhook::receive($raw,$sig)['events_saved']===0,'duplicate webhook ignored');
 $s=$pdo->prepare('SELECT tenant_id,account_id FROM whatsapp_messages WHERE whatsapp_id=?');
 $s->execute(['wamid.test1']);$row=$s->fetch();
 ok((int)$row['tenant_id']===$a&&(int)$row['account_id']===$a1,'inbound message tenant scoped');
+$s=$pdo->prepare('SELECT p.tenant_id,p.account_id,p.wa_id,p.status FROM whatsapp_mobile_push_jobs p
+    JOIN whatsapp_messages m ON m.id=p.message_id WHERE m.whatsapp_id=?');
+$s->execute(['wamid.test1']);$push=$s->fetch();
+ok($push&&(int)$push['tenant_id']===$a&&(int)$push['account_id']===$a1&&
+    $push['wa_id']==='5511999999999'&&$push['status']==='queued','inbound message queued for tenant FCM devices');
 try{$pdo->prepare('INSERT INTO whatsapp_contacts(tenant_id,account_id,wa_id) VALUES (?,?,?)')
     ->execute([$b,$a1,'5511988877766']);throw new RuntimeException('Cross-tenant write allowed');}
 catch(PDOException $e){ok($e->getCode()==='23000','cross-tenant FK rejected');}
