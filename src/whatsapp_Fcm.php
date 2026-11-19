@@ -161,7 +161,8 @@ final class WhatsAppFcm {
                 WHERE (sub.id IS NULL OR sub.status='active') AND j.status IN ('queued','retry')
                 AND j.next_attempt_at<=UTC_TIMESTAMP() AND j.created_at>UTC_TIMESTAMP()-INTERVAL 1 DAY";
             if($pushJobId!==null)$sql.=' AND j.id=?';
-            $sql.=" ORDER BY j.id LIMIT 1 FOR UPDATE SKIP LOCKED";
+            // Keep the row-locking claim portable to MySQL/MariaDB versions without SKIP LOCKED.
+            $sql.=" ORDER BY j.id LIMIT 1 FOR UPDATE";
             $s=$pdo->prepare($sql);
             if($pushJobId!==null)$s->execute([$pushJobId]);else $s->execute();
             $job=$s->fetch();
@@ -223,3 +224,4 @@ final class WhatsAppFcm {
         self::finish($job,'done');
     }
 }
+
