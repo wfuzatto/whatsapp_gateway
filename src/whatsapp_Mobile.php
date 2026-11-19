@@ -124,8 +124,7 @@ final class WhatsAppMobile {
         $tenant=(int)$ctx['tenant_id'];
         // O filtro tenant_id esta presente tanto na consulta externa quanto na subconsulta.
         $s=db()->prepare("SELECT m.id,m.account_id,m.wa_id,m.direction,m.message_type,m.payload,
-                m.created_at,c.display_name,c.last_inbound_at,c.photo_mime AS contact_photo_mime,
-                COALESCE(c.photo_hash,SHA2(c.photo_data,256),'') AS contact_photo_hash,a.name AS account_name
+                m.created_at,c.display_name,c.last_inbound_at,a.name AS account_name
              FROM whatsapp_messages m
              JOIN whatsapp_accounts a ON a.id=m.account_id AND a.tenant_id=m.tenant_id AND a.status='active'
              LEFT JOIN whatsapp_contacts c ON c.account_id=m.account_id AND c.wa_id=m.wa_id
@@ -134,8 +133,36 @@ final class WhatsAppMobile {
                AND m.id=(SELECT MAX(x.id) FROM whatsapp_messages x
                     WHERE x.tenant_id=m.tenant_id AND x.account_id=m.account_id AND x.wa_id=m.wa_id)
              ORDER BY m.id DESC LIMIT 120");
-        $s->execute([$tenant]);$result=[];
-        foreach($s->fetchAll() as $row){
+        $s->execute([$tenant]);$rows=$s->fetchAll();
+        // Fotos pertencem ao contato dentro do tenant. Em empresas com vários
+        // números, o mesmo contato pode ter sido cadastrado em outra conta.
+        $phones=array_values(array_unique(array_filter(
+            array_map(static fn($row)=>(string)$row['wa_id'],$rows),'validPhone')));
+        $photosByPhone=[];
+        if($phones){
+            $accounts=db()->prepare("SELECT id FROM whatsapp_accounts WHERE tenant_id=? AND status='active'");
+            $accounts->execute([$tenant]);$accountIds=array_map('intval',$accounts->fetchAll(PDO::FETCH_COLUMN));
+            if($accountIds){
+                $phoneMarks=implode(',',array_fill(0,count($phones),'?'));
+                $accountMarks=implode(',',array_fill(0,count($accountIds),'?'));
+                $photoQuery=db()->prepare("SELECT account_id,wa_id,photo_mime,
+                    COALESCE(NULLIF(photo_hash,''),SHA2(photo_data,256),'') AS photo_version
+                    FROM whatsapp_contacts WHERE tenant_id=? AND account_id IN ($accountMarks)
+                    AND wa_id IN ($phoneMarks) AND photo_mime IN ('image/jpeg','image/png','image/webp')
+                    ORDER BY id DESC");
+                $photoQuery->execute([$tenant,...$accountIds,...$phones]);
+                foreach($photoQuery->fetchAll() as $photo){
+                    $photosByPhone[(string)$photo['wa_id']][]=$photo;
+                }
+            }
+        }
+        $result=[];
+        foreach($rows as $row){
+            $photoChoices=$photosByPhone[(string)$row['wa_id']]??[];$photo=null;
+            foreach($photoChoices as $candidate){
+                if((int)$candidate['account_id']===(int)$row['account_id']){$photo=$candidate;break;}
+            }
+            if($photo===null)$photo=$photoChoices[0]??null;
             $result[]=['id'=>$row['account_id'].'-'.$row['wa_id'],
                 'name'=>$row['display_name']?:$row['wa_id'],
                 'phone'=>$row['wa_id'],'account_id'=>(int)$row['account_id'],
@@ -143,9 +170,8 @@ final class WhatsAppMobile {
                 'last_message'=>self::preview($row),
                 'updated_at'=>$row['created_at'],
                 'window_open'=>self::hasWindow($row['last_inbound_at']),
-                'has_photo'=>!empty($row['contact_photo_mime'])&&in_array($row['contact_photo_mime'],
-                    ['image/jpeg','image/png','image/webp'],true),
-                'photo_version'=>(string)($row['contact_photo_hash']??''),
+                'has_photo'=>$photo!==null,
+                'photo_version'=>(string)($photo['photo_version']??''),
                 'unread_count'=>0];
         }
         response(200,['data'=>$result]);
@@ -153,9 +179,16 @@ final class WhatsAppMobile {
     private static function contactPhoto(array $ctx,string $conversationId): never {
         if(($_SERVER['REQUEST_METHOD']??'GET')!=='GET')throw new HttpError('Método não permitido.',405);
         [$account,$phone]=self::conversation($ctx,$conversationId);
-        $s=db()->prepare('SELECT photo_data,photo_mime FROM whatsapp_contacts
-            WHERE tenant_id=? AND account_id=? AND wa_id=? LIMIT 1');
+        $s=db()->prepare("SELECT photo_data,photo_mime FROM whatsapp_contacts
+            WHERE tenant_id=? AND account_id=? AND wa_id=?
+              AND photo_mime IN ('image/jpeg','image/png','image/webp') LIMIT 1");
         $s->execute([$ctx['tenant_id'],$account['id'],$phone]);$row=$s->fetch();
+        if(!$row){
+            $s=db()->prepare("SELECT photo_data,photo_mime FROM whatsapp_contacts
+                WHERE tenant_id=? AND wa_id=? AND photo_mime IN ('image/jpeg','image/png','image/webp')
+                ORDER BY (account_id=?) DESC,id DESC LIMIT 1");
+            $s->execute([$ctx['tenant_id'],$phone,$account['id']]);$row=$s->fetch();
+        }
         $mime=(string)($row['photo_mime']??'');
         if(!$row||!in_array($mime,['image/jpeg','image/png','image/webp'],true))
             throw new HttpError('Foto do contato não encontrada.',404);
