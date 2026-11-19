@@ -329,6 +329,7 @@ final class WhatsAppConsole {
                         'media_id'=>$message['media_id'],
                         'caption'=>(string)$message['caption'],
                         'time_label'=>self::liveTime((string)$message['created_at']),
+                        'created_at_epoch'=>(int)(strtotime((string)$message['created_at'].' UTC')?:0),
                     ];
                 }
             }

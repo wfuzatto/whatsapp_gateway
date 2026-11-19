@@ -108,7 +108,7 @@ header('X-Robots-Tag: noindex, nofollow');
 <section class="chat"><?php if($contact): ?><div class="chathead"><div class="chatname"><span class="avatar" data-photo-state="<?=!empty($contact['photo_mime'])?'1':'0'?>" data-photo-version="<?=consoleE($contact['photo_hash']??'')?>"><?=consoleE(consoleInitial((string)($contact['display_name']?:$waId)))?><?php if(!empty($contact['photo_mime'])): ?><img src="<?=consoleE(WhatsAppConsole::contactPhotoUrl($accountId,$waId,(string)($contact['photo_hash']??'')))?>" alt="" loading="lazy"><?php endif; ?></span><div><b><?=consoleE($contact['display_name']?:$waId)?></b><small><?=consoleE($waId)?> · <?=consoleE($selectedAccount['name']??'WhatsApp')?></small></div></div>
 <form method="post" action="/painel/conversas"><input type="hidden" name="csrf" value="<?=consoleE($data['csrf'])?>"><input type="hidden" name="action" value="set_conversation_status"><input type="hidden" name="account_id" value="<?=$accountId?>"><input type="hidden" name="wa_id" value="<?=consoleE($waId)?>"><input type="hidden" name="status" value="<?=($data['conversation_state']['status']??'open')==='closed'?'open':'closed'?>"><button class="btn secondary" type="submit"><?=($data['conversation_state']['status']??'open')==='closed'?'Reabrir':'Encerrar'?></button></form></div>
 <div class="stream" id="message-stream"><?php foreach(($data['messages']??[]) as $m): $mediaUrl=$m['media_id']?'/painel/midia?'.http_build_query(['account_id'=>$accountId,'wa_id'=>$waId,'id'=>$m['media_id']]):''; ?>
-<article class="bubble <?=$m['direction']==='outbound'?'out':''?>" data-message-id="<?=(int)$m['id']?>" data-direction="<?=consoleE($m['direction'])?>" data-status="<?=consoleE($m['status'])?>">
+<article class="bubble <?=$m['direction']==='outbound'?'out':''?>" data-message-id="<?=(int)$m['id']?>" data-direction="<?=consoleE($m['direction'])?>" data-status="<?=consoleE($m['status'])?>" data-created-at="<?=consoleE((string)(strtotime((string)$m['created_at'].' UTC')?:0))?>">
 <?php if($m['media_id']): ?>
 <?php if($m['message_type']==='image'): ?><button class="media-preview" type="button" data-media-open="image" data-media-src="<?=consoleE($mediaUrl)?>" aria-label="Ampliar imagem"><img src="<?=consoleE($mediaUrl)?>" alt="Imagem recebida" loading="lazy" decoding="async"></button>
 <?php elseif($m['message_type']==='sticker'): ?><img class="media-sticker" src="<?=consoleE($mediaUrl)?>" alt="Figurinha animada" loading="lazy" decoding="async">
@@ -201,7 +201,7 @@ header('X-Robots-Tag: noindex, nofollow');
   var params=new URLSearchParams(window.location.search),accountId=accountSelect?accountSelect.value:(params.get('account_id')||''),selectedWa=params.get('wa_id')||'';
   var seenMessages=new Set(Array.from(rowsBox.querySelectorAll('[data-message-id]')).map(function(row){return row.dataset.messageId;}));
   var conversationSignature='',messageSignature='',refreshing=false,sending=false;
-  var sendButton=null,sendButtonDefault='➤',sendButtonUnavailable=false,sendButtonState='ready',pendingDeliveryMessageId='';
+  var sendButton=null,sendButtonDefault='➤',sendButtonUnavailable=false,sendButtonState='ready',pendingDeliveryMessageId='',timedOutDeliveryMessageId='',pendingDeliveryTimer=0,pendingDeliveryTimeoutMs=120000;
   var knownMessageIds=new Set(Array.from(stream?stream.querySelectorAll('[data-message-id]'):[]).map(function(item){return item.dataset.messageId;}));
   var AudioContextType=window.AudioContext||window.webkitAudioContext,audioContext=null,audioReady=false,soundEnabled=true;
   try{soundEnabled=window.localStorage.getItem('zapapi-chat-sounds')!=='off';}catch(error){}
@@ -228,12 +228,23 @@ header('X-Robots-Tag: noindex, nofollow');
     if(state==='error'){sendButton.disabled=sendButtonUnavailable;sendButton.setAttribute('aria-label','Falha no envio. Tentar novamente');sendButton.title=message||'Falha no envio. Revise e tente novamente.';return;}
     sendButton.disabled=sendButtonUnavailable;sendButton.setAttribute('aria-label','Enviar mensagem');sendButton.title='Enviar mensagem';
   }
+  function clearPendingDeliveryTimer(){if(pendingDeliveryTimer){window.clearTimeout(pendingDeliveryTimer);pendingDeliveryTimer=0;}}
+  function expirePendingDelivery(messageId){if(pendingDeliveryMessageId!==String(messageId))return;pendingDeliveryTimer=0;pendingDeliveryMessageId='';timedOutDeliveryMessageId=String(messageId);setSendButtonState('error','A Meta não confirmou a entrega após 2 minutos. Confira o status no chat antes de reenviar.');}
+  function watchPendingDelivery(messageId,createdAtEpoch){
+    clearPendingDeliveryTimer();pendingDeliveryMessageId=String(messageId);timedOutDeliveryMessageId='';
+    var createdAt=Number(createdAtEpoch)||Math.floor(Date.now()/1000),remaining=pendingDeliveryTimeoutMs-(Date.now()-createdAt*1000);
+    if(remaining<=0){expirePendingDelivery(pendingDeliveryMessageId);return;}
+    setSendButtonState('pending','Aguardando a entrega da mensagem…');
+    var watchedId=pendingDeliveryMessageId;pendingDeliveryTimer=window.setTimeout(function(){expirePendingDelivery(watchedId);},remaining);
+  }
   function updatePendingDelivery(messages){
-    if(!sendButton||!pendingDeliveryMessageId)return;
+    if(!sendButton)return;
+    if(timedOutDeliveryMessageId){var stale=messages.find(function(item){return String(item.id||'')===timedOutDeliveryMessageId;});if(stale&&['delivered','read'].includes(stale.status)){timedOutDeliveryMessageId='';setSendButtonState('ready');}else if(stale&&stale.status==='failed'){timedOutDeliveryMessageId='';setSendButtonState('error','A Meta não entregou a mensagem. Você pode tentar novamente.');}}
+    if(!pendingDeliveryMessageId)return;
     var message=messages.find(function(item){return String(item.id||'')===pendingDeliveryMessageId;});if(!message)return;
-    if(message.status==='delivered'||message.status==='read'){pendingDeliveryMessageId='';setSendButtonState('ready');}
-    else if(message.status==='failed'){pendingDeliveryMessageId='';setSendButtonState('error','A Meta não entregou a mensagem. Você pode tentar novamente.');}
-    else if(message.status==='uncertain'){pendingDeliveryMessageId='';setSendButtonState('error','Não foi possível confirmar a entrega. Confira a conversa antes de reenviar.');}
+    if(message.status==='delivered'||message.status==='read'){clearPendingDeliveryTimer();pendingDeliveryMessageId='';setSendButtonState('ready');}
+    else if(message.status==='failed'){clearPendingDeliveryTimer();pendingDeliveryMessageId='';setSendButtonState('error','A Meta não entregou a mensagem. Você pode tentar novamente.');}
+    else if(message.status==='uncertain'){clearPendingDeliveryTimer();pendingDeliveryMessageId='';setSendButtonState('error','Não foi possível confirmar a entrega. Confira a conversa antes de reenviar.');}
     else setSendButtonState('pending','Aguardando a entrega da mensagem…');
   }
   function conversationRow(row){var label=row.display_name||row.wa_id,a=node('a','convrow'+(selectedWa===row.wa_id?' selected':''));a.href=urlFor(row.wa_id);a.dataset.messageId=row.message_id;
@@ -272,7 +283,7 @@ header('X-Robots-Tag: noindex, nofollow');
     var nearBottom=stream.scrollHeight-stream.scrollTop-stream.clientHeight<90,fragment=document.createDocumentFragment();
     var statusNames={accepted:'Enviada à Meta',sent:'Enviada',delivered:'Entregue',read:'Lida',failed:'Falhou',received:'Recebida'};
     if(!messages.length){var empty=node('div','empty');empty.appendChild(node('b','', 'Sem mensagens'));empty.appendChild(document.createTextNode('Envie um template aprovado para iniciar.'));fragment.appendChild(empty);}
-    messages.forEach(function(message){var bubble=node('article','bubble'+(message.direction==='outbound'?' out':''));bubble.dataset.messageId=String(message.id||'');bubble.dataset.direction=message.direction||'';bubble.dataset.status=message.status||'';
+    messages.forEach(function(message){var bubble=node('article','bubble'+(message.direction==='outbound'?' out':''));bubble.dataset.messageId=String(message.id||'');bubble.dataset.direction=message.direction||'';bubble.dataset.status=message.status||'';bubble.dataset.createdAt=String(message.created_at_epoch||0);
       if(message.media_id){var src=conversationMediaUrl(message.media_id),type=message.message_type||'';
         if(type==='image'){var preview=node('button','media-preview');preview.type='button';preview.dataset.mediaOpen='image';preview.dataset.mediaSrc=src;preview.setAttribute('aria-label','Ampliar imagem');var image=node('img');image.src=src;image.alt='Imagem recebida';image.loading='lazy';image.decoding='async';preview.appendChild(image);bubble.appendChild(preview);}
         else if(type==='sticker'){var sticker=node('img','media-sticker');sticker.src=src;sticker.alt='Figurinha animada';sticker.loading='lazy';sticker.decoding='async';bubble.appendChild(sticker);}
@@ -311,14 +322,14 @@ header('X-Robots-Tag: noindex, nofollow');
   document.querySelectorAll('[data-quick-reply]').forEach(function(select){select.addEventListener('change',function(){if(this.value){var field=document.querySelector('.composer textarea');if(field){field.value=this.value;field.focus();}}});});
   var composer=document.querySelector('.composer'),composerText=composer&&composer.querySelector('textarea'),fileInput=composer&&composer.querySelector('input[type="file"]'),fileName=composer&&composer.querySelector('[data-file-name]'),emojiToggle=composer&&composer.querySelector('[data-emoji-toggle]'),emojiPicker=composer&&composer.querySelector('[data-emoji-picker]');
   sendButton=composer&&composer.querySelector('button[type="submit"]');sendButtonUnavailable=!!(sendButton&&sendButton.disabled);sendButtonDefault=sendButton?sendButton.textContent.trim():'➤';
-  if(sendButton){var initialOutgoing=stream?Array.from(stream.querySelectorAll('.bubble[data-direction="outbound"]')):[],lastOutgoing=initialOutgoing[initialOutgoing.length-1];if(lastOutgoing&&['accepted','sent'].includes(lastOutgoing.dataset.status)){pendingDeliveryMessageId=lastOutgoing.dataset.messageId;setSendButtonState('pending','Aguardando a entrega da última mensagem…');}else if(lastOutgoing&&(lastOutgoing.dataset.status==='failed'||lastOutgoing.dataset.status==='uncertain'))setSendButtonState('error','A última mensagem não foi confirmada como entregue.');else setSendButtonState('ready');}
+  if(sendButton){var initialOutgoing=stream?Array.from(stream.querySelectorAll('.bubble[data-direction="outbound"]')):[],lastOutgoing=initialOutgoing[initialOutgoing.length-1];if(lastOutgoing&&['accepted','sent'].includes(lastOutgoing.dataset.status)){watchPendingDelivery(lastOutgoing.dataset.messageId,lastOutgoing.dataset.createdAt);}else if(lastOutgoing&&(lastOutgoing.dataset.status==='failed'||lastOutgoing.dataset.status==='uncertain'))setSendButtonState('error','A última mensagem não foi confirmada como entregue.');else setSendButtonState('ready');}
   function clearSendError(){if(sendButtonState==='error')setSendButtonState('ready');}
   if(fileInput&&fileName)fileInput.addEventListener('change',function(){fileName.textContent=this.files&&this.files[0]?this.files[0].name:'';fileName.hidden=!fileName.textContent;clearSendError();});
   if(emojiToggle&&emojiPicker){emojiToggle.addEventListener('click',function(){var open=emojiPicker.hidden;emojiPicker.hidden=!open;emojiToggle.setAttribute('aria-expanded',String(open));});emojiPicker.addEventListener('click',function(event){var button=event.target.closest('[data-emoji]');if(!button||!composerText)return;var emoji=button.dataset.emoji,start=composerText.selectionStart,end=composerText.selectionEnd;composerText.setRangeText(emoji,start,end,'end');composerText.focus();emojiPicker.hidden=true;emojiToggle.setAttribute('aria-expanded','false');});document.addEventListener('pointerdown',function(event){if(!composer.contains(event.target)){emojiPicker.hidden=true;emojiToggle.setAttribute('aria-expanded','false');}});}
   if(composerText){composerText.addEventListener('input',clearSendError);composerText.addEventListener('keydown',function(event){if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();var submitButton=composer.querySelector('button[type="submit"]');if(!submitButton||!submitButton.disabled){if(composer.requestSubmit)composer.requestSubmit();}}});}
   if(stream)stream.scrollTop=stream.scrollHeight;
   if(composer)composer.addEventListener('submit',async function(event){
-    event.preventDefault();if(sending||!sendButton||sendButton.disabled)return;sending=true;setSendButtonState('pending','Enviando mensagem à Meta…');
+    event.preventDefault();if(sending||!sendButton||sendButton.disabled)return;sending=true;clearPendingDeliveryTimer();pendingDeliveryMessageId='';timedOutDeliveryMessageId='';setSendButtonState('pending','Enviando mensagem à Meta…');
     try{
       var response=await fetch(composer.getAttribute('action')||window.location.href,{method:'POST',body:new FormData(composer),credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
       if(new URL(response.url).pathname==='/entrar'){window.location.assign(response.url);return;}
@@ -326,7 +337,7 @@ header('X-Robots-Tag: noindex, nofollow');
       if(!response.ok||!data.ok)throw new Error(data.error||'Não foi possível enviar a mensagem.');
       pendingDeliveryMessageId=String(data.message&&data.message.id||'');
       if(!pendingDeliveryMessageId)throw new Error('A Meta aceitou o envio, mas não retornou o identificador da mensagem. Confira o chat antes de tentar novamente.');
-      updatePendingDelivery([{id:pendingDeliveryMessageId,status:data.message.status||'accepted'}]);
+      watchPendingDelivery(pendingDeliveryMessageId,Math.floor(Date.now()/1000));
       var textarea=composer.querySelector('textarea'),file=composer.querySelector('input[type="file"]');if(textarea)textarea.value='';if(file)file.value='';if(fileName){fileName.textContent='';fileName.hidden=true;}
     }catch(error){pendingDeliveryMessageId='';setSendButtonState('error',error.message||'Não foi possível enviar a mensagem. Revise e tente novamente.');}
     finally{sending=false;refresh();}
