@@ -99,13 +99,23 @@ def main() -> None:
         except (OSError, subprocess.TimeoutExpired):
             fail("Pinned SFTP preflight could not be started or timed out")
         if probe.returncode != 0:
-            fail("SFTP preflight failed; no credential was uploaded")
+            diagnostic = (probe.stdout + "\n" + probe.stderr).lower()
+            if "permission denied" in diagnostic or "authentication failed" in diagnostic:
+                fail("SFTP login was rejected by the hosting server; no credential was uploaded")
+            if "host key verification failed" in diagnostic:
+                fail("SFTP host-key pin did not match; no credential was uploaded")
+            if "subsystem request failed" in diagnostic or "sftp subsystem" in diagnostic:
+                fail("The SSH service does not allow SFTP; no credential was uploaded")
+            fail(f"SFTP preflight failed (exit {probe.returncode}); no credential was uploaded")
         probe_lines = [line.strip() for line in probe.stdout.splitlines()]
         working_dir = next((line.split(":", 1)[1].strip() for line in probe_lines
                             if line.startswith("Remote working directory:")), "")
-        if (not working_dir or "public_html" not in probe.stdout or
-                "public_html" in pathlib.PurePosixPath(working_dir).parts):
-            fail("SFTP root is not confirmed outside public_html; no credential was uploaded")
+        if not working_dir:
+            fail("SFTP did not report the account root; no credential was uploaded")
+        if "public_html" not in probe.stdout:
+            fail("SFTP could not confirm the public_html directory; no credential was uploaded")
+        if "public_html" in pathlib.PurePosixPath(working_dir).parts:
+            fail("SFTP starts inside public_html; no credential was uploaded")
         if REMOTE_PATH in probe.stdout:
             fail("FCM credential file already exists; existing file was left untouched")
         try:
