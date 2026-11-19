@@ -68,14 +68,23 @@ final class Webhook {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e; // A Meta deve repetir: jamais confirmar evento não gravado
         }
-        if($pushJobIds&&function_exists('fastcgi_finish_request')){
-            register_shutdown_function(static function() use($pushJobIds): void {
-                fastcgi_finish_request();
+        if($pushJobIds){
+            $deliver=static function() use($pushJobIds): void {
                 foreach($pushJobIds as $pushJobId){
                     try{$job=WhatsAppFcm::claim((int)$pushJobId);if($job)WhatsAppFcm::process($job);}
-                    catch(Throwable $e){error_log('WhatsApp FCM background delivery failed: '.get_class($e));}
+                    catch(Throwable $e){error_log('WhatsApp FCM delivery failed: '.get_class($e));}
                 }
-            });
+            };
+            if(function_exists('fastcgi_finish_request')){
+                register_shutdown_function(static function() use($deliver): void {
+                    fastcgi_finish_request();
+                    $deliver();
+                });
+            }else{
+                // Shared hosts may use a SAPI without fastcgi_finish_request and no cron.
+                // Send after commit before ACK so inbound notifications are not stranded in the outbox.
+                $deliver();
+            }
         }
         return ['accepted'=>true,'events_saved'=>$saved];
     }
