@@ -202,10 +202,40 @@ final class WhatsAppMobile {
     }
     private static function messages(array $ctx,string $id): never {
         [$account,$phone]=self::conversation($ctx,$id);
-        $s=db()->prepare("SELECT id,direction,status,message_type,payload,created_at
-            FROM whatsapp_messages WHERE tenant_id=? AND account_id=? AND wa_id=?
-            ORDER BY id DESC LIMIT 100");
-        $s->execute([$ctx['tenant_id'],$account['id'],$phone]);$rows=array_reverse($s->fetchAll());
+        $limitRaw=$_GET['limit']??'50';
+        $limit=(is_string($limitRaw)&&ctype_digit($limitRaw))?max(1,min(100,(int)$limitRaw)):50;
+        $baseWhere='tenant_id=? AND account_id=? AND wa_id=?';
+        $baseParams=[$ctx['tenant_id'],$account['id'],$phone];
+        $hasMore=false;
+        $afterRaw=$_GET['after_id']??null;
+        if(is_string($afterRaw)&&ctype_digit($afterRaw)&&strlen($afterRaw)<=18){
+            // Polling requests ask for new messages and a small set of existing IDs
+            // whose delivery status may have changed. This avoids downloading the
+            // latest page on every one-second refresh.
+            $where=$baseWhere.' AND (id>?';
+            $params=[...$baseParams,(int)$afterRaw];
+            $rawIds=$_GET['ids']??'';
+            $ids=is_string($rawIds)?array_slice(explode(',',$rawIds),0,50):[];
+            $ids=array_values(array_filter($ids,static fn($value)=>ctype_digit($value)&&strlen($value)<=18));
+            if($ids){$where.=' OR id IN ('.implode(',',array_fill(0,count($ids),'?')).')';
+                foreach($ids as $value)$params[]=(int)$value;}
+            $where.=')';
+            $s=db()->prepare("SELECT id,direction,status,message_type,payload,created_at
+                FROM whatsapp_messages WHERE $where ORDER BY id ASC LIMIT 100");
+            $s->execute($params);$rows=$s->fetchAll();
+        }else{
+            $beforeRaw=$_GET['before_id']??null;
+            $where=$baseWhere;$params=$baseParams;
+            if(is_string($beforeRaw)&&ctype_digit($beforeRaw)&&strlen($beforeRaw)<=18){
+                $where.=' AND id<?';$params[]=(int)$beforeRaw;
+            }
+            $s=db()->prepare("SELECT id,direction,status,message_type,payload,created_at
+                FROM whatsapp_messages WHERE $where ORDER BY id DESC LIMIT ".($limit+1));
+            $s->execute($params);$rows=$s->fetchAll();
+            $hasMore=count($rows)>$limit;
+            if($hasMore)$rows=array_slice($rows,0,$limit);
+            $rows=array_reverse($rows);
+        }
         $data=[];
         foreach($rows as $row){
             $data[]=['id'=>(string)$row['id'],'direction'=>$row['direction'],
@@ -215,7 +245,8 @@ final class WhatsAppMobile {
         $s=db()->prepare("SELECT last_inbound_at,display_name FROM whatsapp_contacts
             WHERE tenant_id=? AND account_id=? AND wa_id=?");
         $s->execute([$ctx['tenant_id'],$account['id'],$phone]);$contact=$s->fetch()?:[];
-        response(200,['data'=>$data,'window_open'=>self::hasWindow($contact['last_inbound_at']??null),
+        response(200,['data'=>$data,'has_more'=>$hasMore,
+            'window_open'=>self::hasWindow($contact['last_inbound_at']??null),
             'contact'=>['name'=>$contact['display_name']??$phone,'phone'=>$phone],
             'account_id'=>(int)$account['id']]);
     }

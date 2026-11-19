@@ -60,6 +60,34 @@ code="$(curl -sS -o "$tmp/denied" -w '%{http_code}' -H "Authorization: Bearer $t
  "$base/conversations/$idA/messages")"
 [[ "$code" == 404 ]] || { echo "Vazamento entre tenants: HTTP $code"; exit 1; }
 echo "OK: bloqueio de ID de conversa estrangeiro"
+php -r '
+require "src/whatsapp_bootstrap.php";
+$p=db();$parts=explode("-",$argv[1],2);$account=(int)$parts[0];$phone=$parts[1]??"";
+$s=$p->prepare("SELECT tenant_id FROM whatsapp_accounts WHERE id=?");$s->execute([$account]);$tenant=$s->fetchColumn();
+if(!$tenant||!$phone)throw new RuntimeException("Mobile pagination fixture missing");
+$insert=$p->prepare("INSERT INTO whatsapp_messages(tenant_id,account_id,wa_id,direction,whatsapp_id,message_type,status,payload)
+    VALUES (?,?,?,?,?,?,?,?)");
+for($i=1;$i<=25;$i++)$insert->execute([$tenant,$account,$phone,"outbound","wamid.page.test.".$account.".".$i,
+    "text","sent",jsonString(["type"=>"text","text"=>["body"=>"Mobile page fixture ".$i]])]);
+' "$idA"
+curl -fsS -H "Authorization: Bearer $token1" "$base/conversations/$idA/messages?limit=10" -o "$tmp/page1.json"
+python3 - "$tmp/page1.json" <<'PY'
+import json,sys
+page=json.load(open(sys.argv[1])); rows=page['data']; ids=[int(row['id']) for row in rows]
+assert len(rows)==10 and ids==sorted(ids) and page['has_more'] is True and page['window_open'] is True
+print('OK: mobile API returns latest ten messages and indicates older pages')
+print(ids[0])
+PY
+before_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["data"][0]["id"])' "$tmp/page1.json")"
+curl -fsS -H "Authorization: Bearer $token1" \
+ "$base/conversations/$idA/messages?limit=10&before_id=$before_id" -o "$tmp/page2.json"
+python3 - "$tmp/page1.json" "$tmp/page2.json" <<'PY'
+import json,sys
+newer=json.load(open(sys.argv[1]))['data']; older=json.load(open(sys.argv[2])); rows=older['data']
+ids=[int(row['id']) for row in rows]
+assert len(rows)==10 and ids==sorted(ids) and max(ids)<int(newer[0]['id']) and older['has_more'] is True
+print('OK: before_id returns the preceding ten messages without overlap')
+PY
 media_message_id="$(python3 -c 'import json,sys; row=json.load(open(sys.argv[1]))["data"][0]; print(row["account_id"],row["phone"])' "$tmp/a.json" | {
   read -r account_id phone
   php -r '
@@ -93,6 +121,13 @@ echo "OK: validação do identificador Meta antes do download"
 idNew="$(curl -fsS -H "Authorization: Bearer $token1" \
  -H 'Content-Type: application/json' -d '{"phone":"5511999933333"}' \
  "$base/conversations" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')"
+curl -fsS -H "Authorization: Bearer $token1" "$base/conversations/$idNew/messages?limit=10" -o "$tmp/closed_window.json"
+python3 - "$tmp/closed_window.json" <<'PY'
+import json,sys
+state=json.load(open(sys.argv[1]))
+assert state['window_open'] is False and state['data']==[]
+print('OK: empty conversation reports closed 24-hour window')
+PY
 code="$(curl -sS -o "$tmp/window" -w '%{http_code}' \
   -H "Authorization: Bearer $token1" -H 'Content-Type: application/json' \
   -d '{"text":"Mensagem fora da janela"}' \
