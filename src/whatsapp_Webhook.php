@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/whatsapp_bootstrap.php';
 require_once __DIR__ . '/whatsapp_Fcm.php';
+require_once __DIR__ . '/whatsapp_Rules.php';
 
 final class Webhook {
     public static function verifySubscription(array $query): string {
@@ -29,6 +30,7 @@ final class Webhook {
         $saved = 0;
         $pushJobIds=[];
         WhatsAppFcm::ensureSchema();
+        Rules::ensureStatusEventSchema($pdo);
         $pdo->beginTransaction();
         try {
             foreach ($body['entry'] as $entry) {
@@ -48,11 +50,12 @@ final class Webhook {
                     $field = substr((string)($change['field'] ?? 'unknown'), 0, 80);
                     $stmt = $pdo->prepare('INSERT IGNORE INTO whatsapp_webhook_events(tenant_id,account_id,event_key,event_type,payload) VALUES (?,?,?,?,?)');
                     $stmt->execute([$tenantId, $accountId, $eventKey, $field, jsonString(['entry_id'=>$entryId,'change'=>$change])]);
-                    if ($stmt->rowCount() === 0) continue; // Meta pode enviar novamente o mesmo evento
-                    $saved++;
+                    $isNewEvent=$stmt->rowCount()===1;
+                    if($isNewEvent)$saved++;
                     if ($accountId !== null) {
-                        self::updateIncoming($pdo, $tenantId, $accountId, $value, $pushJobIds);
-                        if (!empty($account['callback_url']) && !empty($account['callback_secret_box'])) {
+                        // Reaplique status também em duplicatas: o primeiro callback pode ter chegado antes do registro outbound.
+                        self::updateIncoming($pdo, $tenantId, $accountId, $value, $pushJobIds, $eventKey);
+                        if ($isNewEvent&&!empty($account['callback_url']) && !empty($account['callback_secret_box'])) {
                             $stmt = $pdo->prepare('INSERT IGNORE INTO whatsapp_jobs(tenant_id,account_id,kind,idempotency_key,payload)
                                                    VALUES (?,?,"callback",?,?)');
                             $stmt->execute([$tenantId,$accountId,'event-' . $eventKey,jsonString([
@@ -88,7 +91,7 @@ final class Webhook {
         }
         return ['accepted'=>true,'events_saved'=>$saved];
     }
-    private static function updateIncoming(PDO $pdo, int $tenantId, int $accountId, array $value,array &$pushJobIds): void {
+    private static function updateIncoming(PDO $pdo, int $tenantId, int $accountId, array $value,array &$pushJobIds,string $eventKey): void {
         $names = [];
         foreach (($value['contacts'] ?? []) as $contact) {
             $waId = (string)($contact['wa_id'] ?? '');
@@ -119,9 +122,7 @@ final class Webhook {
         }
         foreach (($value['statuses'] ?? []) as $st) {
             if (!is_array($st) || empty($st['id']) || empty($st['status'])) continue;
-            $status = substr((string)$st['status'], 0, 30);
-            $s = $pdo->prepare('UPDATE whatsapp_messages SET status=? WHERE tenant_id=? AND account_id=? AND whatsapp_id=?');
-            $s->execute([$status,$tenantId,$accountId,(string)$st['id']]);
+            Rules::recordStatusEvent($pdo,$tenantId,$accountId,$st,$eventKey,false);
         }
     }
 }

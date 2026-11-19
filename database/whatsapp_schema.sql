@@ -89,6 +89,19 @@ CREATE TABLE whatsapp_webhook_events (
   INDEX idx_event_lookup (tenant_id,account_id,received_at),
   FOREIGN KEY (tenant_id,account_id) REFERENCES whatsapp_accounts(tenant_id,id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE whatsapp_message_status_events (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id BIGINT UNSIGNED NOT NULL,
+  account_id BIGINT UNSIGNED NOT NULL,
+  whatsapp_id VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  status VARCHAR(30) NOT NULL,
+  event_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  event_timestamp BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_message_status_event (tenant_id,account_id,event_key),
+  INDEX idx_message_status_lookup (tenant_id,account_id,whatsapp_id,event_timestamp),
+  FOREIGN KEY (tenant_id,account_id) REFERENCES whatsapp_accounts(tenant_id,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE whatsapp_jobs (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   tenant_id BIGINT UNSIGNED NOT NULL,

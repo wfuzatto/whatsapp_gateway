@@ -314,6 +314,7 @@ final class WhatsAppConsole {
         $state=['status'=>'open','closed_at'=>null];$windowOpen=false;
         if($waId!==''&&$accountId) {
             if(!validPhone($waId))throw new HttpError('Número de conversa inválido.',422);
+            Rules::reconcileMessageStatuses(db(),$tenantId,$accountId,$waId);
             $s=db()->prepare('SELECT wa_id,display_name,photo_mime,photo_hash,last_inbound_at FROM whatsapp_contacts WHERE tenant_id=? AND account_id=? AND wa_id=? LIMIT 1');
             $s->execute([$tenantId,$accountId,$waId]);$contact=$s->fetch()?:null;
             if($contact) {
@@ -379,6 +380,7 @@ final class WhatsAppConsole {
             $data['selected_wa_id']=$waId;$data['contact']=null;$data['messages']=[];
             $data['conversation_state']=['status'=>'open','closed_at'=>null];
             if($waId!==''&&$selected) {
+                Rules::reconcileMessageStatuses(db(),$tenantId,$selected,$waId);
                 $s=db()->prepare('SELECT wa_id,display_name,photo_mime,photo_hash,opt_in_at,opt_in_source,last_inbound_at
                     FROM whatsapp_contacts WHERE tenant_id=? AND account_id=? AND wa_id=? LIMIT 1');
                 $s->execute([$tenantId,$selected,$waId]);$data['contact']=$s->fetch();
