@@ -124,7 +124,8 @@ final class WhatsAppMobile {
         $tenant=(int)$ctx['tenant_id'];
         // O filtro tenant_id esta presente tanto na consulta externa quanto na subconsulta.
         $s=db()->prepare("SELECT m.id,m.account_id,m.wa_id,m.direction,m.message_type,m.payload,
-                m.created_at,c.display_name,c.last_inbound_at,a.name AS account_name
+                m.created_at,c.display_name,c.last_inbound_at,c.photo_mime AS contact_photo_mime,
+                COALESCE(c.photo_hash,SHA2(c.photo_data,256),'') AS contact_photo_hash,a.name AS account_name
              FROM whatsapp_messages m
              JOIN whatsapp_accounts a ON a.id=m.account_id AND a.tenant_id=m.tenant_id AND a.status='active'
              LEFT JOIN whatsapp_contacts c ON c.account_id=m.account_id AND c.wa_id=m.wa_id
@@ -142,9 +143,34 @@ final class WhatsAppMobile {
                 'last_message'=>self::preview($row),
                 'updated_at'=>$row['created_at'],
                 'window_open'=>self::hasWindow($row['last_inbound_at']),
+                'has_photo'=>!empty($row['contact_photo_mime'])&&in_array($row['contact_photo_mime'],
+                    ['image/jpeg','image/png','image/webp'],true),
+                'photo_version'=>(string)($row['contact_photo_hash']??''),
                 'unread_count'=>0];
         }
         response(200,['data'=>$result]);
+    }
+    private static function contactPhoto(array $ctx,string $conversationId): never {
+        if(($_SERVER['REQUEST_METHOD']??'GET')!=='GET')throw new HttpError('Método não permitido.',405);
+        [$account,$phone]=self::conversation($ctx,$conversationId);
+        $s=db()->prepare('SELECT photo_data,photo_mime FROM whatsapp_contacts
+            WHERE tenant_id=? AND account_id=? AND wa_id=? LIMIT 1');
+        $s->execute([$ctx['tenant_id'],$account['id'],$phone]);$row=$s->fetch();
+        $mime=(string)($row['photo_mime']??'');
+        if(!$row||!in_array($mime,['image/jpeg','image/png','image/webp'],true))
+            throw new HttpError('Foto do contato não encontrada.',404);
+        $bytes=$row['photo_data']??null;
+        if(is_resource($bytes))$bytes=stream_get_contents($bytes);
+        if(!is_string($bytes)||$bytes===''||strlen($bytes)>2*1024*1024)
+            throw new HttpError('Foto do contato indisponível.',404);
+        header_remove('Content-Type');
+        header('Content-Type: '.$mime);
+        header('Content-Length: '.strlen($bytes));
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: private, max-age=86400');
+        header('Vary: Authorization');
+        header('Content-Disposition: inline; filename="contact-photo"');
+        echo $bytes;exit;
     }
     private static function hasWindow(?string $timestamp): bool {
         return $timestamp!==null && strtotime($timestamp.' UTC')!==false &&
@@ -415,6 +441,8 @@ final class WhatsAppMobile {
             if($method==='GET')self::listConversations($ctx);
             if($method==='POST')self::createConversation($ctx);
         }
+        if(preg_match('~^/contacts/([1-9][0-9]*-[0-9]{7,20})/photo$~D',$route,$matches))
+            self::contactPhoto($ctx,$matches[1]);
         if($route==='/templates' && $method==='GET'){
             $raw=$_GET['account_id']??null;
             $number=($raw!==null&&is_string($raw)&&ctype_digit($raw))?(int)$raw:null;
