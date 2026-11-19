@@ -109,17 +109,87 @@ final class WhatsAppFcm {
         return self::$accessToken;
     }
 
+    private static function notificationText(string $value,int $limit): string {
+        $value=preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u',' ',$value)??$value;
+        $value=trim(preg_replace('/\s+/u',' ',$value)??$value);
+        if($value==='')return '';
+        if(function_exists('mb_strlen')&&function_exists('mb_substr'))
+            return mb_strlen($value,'UTF-8')>$limit?mb_substr($value,0,$limit-1,'UTF-8').'…':$value;
+        $count=preg_match_all('/./us',$value,$characters);
+        if($count!==false&&$count>$limit)return implode('',array_slice($characters[0],0,$limit-1)).'…';
+        return $value;
+    }
+
+    private static function notificationContent(array $job): array {
+        $fallbackSender=self::notificationText((string)$job['wa_id'],80)?:'Nova mensagem';
+        try{
+            $s=db()->prepare('SELECT m.payload,c.display_name FROM whatsapp_messages m
+                LEFT JOIN whatsapp_contacts c ON c.tenant_id=m.tenant_id AND c.account_id=m.account_id AND c.wa_id=m.wa_id
+                WHERE m.id=? AND m.tenant_id=? AND m.account_id=? AND m.wa_id=? AND m.direction="inbound" LIMIT 1');
+            $s->execute([$job['message_id'],$job['tenant_id'],$job['account_id'],$job['wa_id']]);
+            $row=$s->fetch();
+        }catch(Throwable $e){
+            error_log('WhatsApp FCM preview lookup failed: '.get_class($e));
+            return ['sender'=>$fallbackSender,'preview'=>'Nova mensagem recebida.'];
+        }
+        if(!$row)return ['sender'=>$fallbackSender,'preview'=>'Nova mensagem recebida.'];
+        $message=json_decode((string)$row['payload'],true);
+        if(!is_array($message))$message=[];
+        $type=strtolower((string)($message['type']??''));
+        $captionValue=$message[$type]['caption']??'';
+        $caption=is_string($captionValue)?trim($captionValue):'';
+        switch($type){
+            case 'text':
+                $preview=is_string($message['text']['body']??null)?$message['text']['body']:'';
+                break;
+            case 'image': $preview=$caption!==''?'📷 '.$caption:'📷 Foto'; break;
+            case 'video': $preview=$caption!==''?'🎥 '.$caption:'🎥 Vídeo'; break;
+            case 'audio': $preview='🎤 Áudio'; break;
+            case 'sticker': $preview='🎭 Figurinha'; break;
+            case 'document':
+                $fileName=$message['document']['filename']??'';
+                $preview=$caption!==''?'📎 '.$caption:'📎 '.(is_string($fileName)&&$fileName!==''?$fileName:'Documento');
+                break;
+            case 'location':
+                $place=$message['location']['name']??$message['location']['address']??'';
+                $preview='📍 '.(is_string($place)&&$place!==''?$place:'Localização');
+                break;
+            case 'contacts':
+                $contact=$message['contacts'][0]['name']['formatted_name']??'';
+                $preview='👤 '.(is_string($contact)&&$contact!==''?$contact:'Contato');
+                break;
+            case 'interactive':
+                $answer=$message['interactive']['button_reply']['title']??$message['interactive']['list_reply']['title']??'';
+                $preview=is_string($answer)&&$answer!==''?$answer:'Resposta interativa';
+                break;
+            case 'button':
+                $answer=$message['button']['text']??'';
+                $preview=is_string($answer)&&$answer!==''?$answer:'Resposta';
+                break;
+            case 'reaction':
+                $emoji=$message['reaction']['emoji']??'';
+                $preview=is_string($emoji)&&$emoji!==''?'Reação '.$emoji:'Reação';
+                break;
+            default: $preview='Nova mensagem recebida.';
+        }
+        $sender=self::notificationText((string)($row['display_name']??''),80)?:$fallbackSender;
+        $preview=self::notificationText($preview,320)?:'Nova mensagem recebida.';
+        return ['sender'=>$sender,'preview'=>$preview];
+    }
+
     private static function send(string $accessToken,string $deviceToken,array $job): array {
         $body=['message'=>[
             'token'=>$deviceToken,
             'data'=>[
                 'type'=>'new_message',
                 'conversation_id'=>$job['account_id'].'-'.$job['wa_id'],
-                'message_id'=>(string)$job['message_id']
+                'message_id'=>(string)$job['message_id'],
+                'sender'=>(string)$job['notification_sender'],
+                'preview'=>(string)$job['notification_preview']
             ],
             'notification'=>[
-                'title'=>'ZapApi • Nova mensagem',
-                'body'=>'Há uma nova mensagem para sua equipe.'
+                'title'=>(string)$job['notification_sender'],
+                'body'=>(string)$job['notification_preview']
             ],
             'android'=>[
                 'priority'=>'HIGH','ttl'=>'3600s',
@@ -205,6 +275,9 @@ final class WhatsAppFcm {
             WHERE d.tenant_id=? AND ms.revoked_at IS NULL AND ms.expires_at>UTC_TIMESTAMP()");
         $s->execute([$job['tenant_id']]);$devices=$s->fetchAll();
         if(!$devices){self::finish($job,'done');return;}
+        $content=self::notificationContent($job);
+        $job['notification_sender']=$content['sender'];
+        $job['notification_preview']=$content['preview'];
         $transientError=null;
         foreach($devices as $device){
             try{$token=unseal((string)$device['token_box']);}
