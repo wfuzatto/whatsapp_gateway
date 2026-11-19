@@ -39,7 +39,7 @@ final class Jobs {
                                 AND a.tenant_id=j.tenant_id AND a.status='active'
                               WHERE (s.id IS NULL OR s.status='active') AND j.status IN ('queued','retry')
                               AND j.next_attempt_at<=UTC_TIMESTAMP() ORDER BY j.id
-                              LIMIT 1 FOR UPDATE SKIP LOCKED");
+                              LIMIT 1 FOR UPDATE");
             $job = $s->fetch();
             if (!$job) { $pdo->commit(); return null; }
             $pdo->prepare("UPDATE whatsapp_jobs SET status='processing',attempts=attempts+1,locked_at=UTC_TIMESTAMP()
@@ -124,3 +124,4 @@ final class Jobs {
         $s->execute([$error,$delay,$job['id']]);
     }
 }
+
