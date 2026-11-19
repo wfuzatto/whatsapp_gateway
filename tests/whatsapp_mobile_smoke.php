@@ -2,7 +2,7 @@
 declare(strict_types=1);
 if(PHP_SAPI!=='cli'||getenv('APP_ENV')!=='test')exit(1);
 require dirname(__DIR__).'/src/whatsapp_Mobile.php';
-require dirname(__DIR__).'/src/whatsapp_Fcm.php';
+require_once dirname(__DIR__).'/src/whatsapp_Fcm.php';
 function ensureMobile(bool $condition,string $name): void {
     if(!$condition)throw new RuntimeException('Mobile test failed: '.$name);
     echo "OK: $name\n";
@@ -15,9 +15,14 @@ foreach($m[0] as $ddl)db()->exec($ddl);
 foreach($m[0] as $ddl)db()->exec($ddl);
 WhatsAppFcm::ensureSchema();
 WhatsAppFcm::ensureSchema();
+WhatsAppFcm::ensureReadCursorSchema();
+WhatsAppFcm::ensureReadCursorSchema();
 ensureMobile((int)db()->query("SELECT COUNT(*) FROM information_schema.tables
     WHERE table_schema=DATABASE() AND table_name LIKE 'whatsapp_mobile_%'")->fetchColumn()===3,
     'mobile and FCM outbox migrations idempotent');
+ensureMobile((int)db()->query("SELECT COUNT(*) FROM information_schema.tables
+    WHERE table_schema=DATABASE() AND table_name='whatsapp_conversation_read_cursors'")->fetchColumn()===1,
+    'conversation read-cursor migration is idempotent');
 ensureMobile(WhatsAppMobile::countVariables('Olá {{1}} {{2}} {{1}}')===2,'template variables unique');
 ensureMobile(WhatsAppMobile::countVariables('Sem variáveis')===0,'template without variables');
 echo "All mobile smoke tests passed\n";
