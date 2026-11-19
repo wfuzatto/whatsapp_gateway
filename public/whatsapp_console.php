@@ -201,7 +201,7 @@ header('X-Robots-Tag: noindex, nofollow');
   var params=new URLSearchParams(window.location.search),accountId=accountSelect?accountSelect.value:(params.get('account_id')||''),selectedWa=params.get('wa_id')||'';
   var seenMessages=new Set(Array.from(rowsBox.querySelectorAll('[data-message-id]')).map(function(row){return row.dataset.messageId;}));
   var conversationSignature='',messageSignature='',refreshing=false,sending=false;
-  var sendButton=null,sendButtonDefault='➤',sendButtonUnavailable=false,sendButtonState='ready',pendingDeliveryMessageId='',timedOutDeliveryMessageId='',pendingDeliveryTimer=0,pendingDeliveryTimeoutMs=120000;
+  var sendButton=null,sendButtonDefault='➤',sendButtonUnavailable=false,sendButtonState='ready',trackedDeliveryMessageId='';
   var knownMessageIds=new Set(Array.from(stream?stream.querySelectorAll('[data-message-id]'):[]).map(function(item){return item.dataset.messageId;}));
   var AudioContextType=window.AudioContext||window.webkitAudioContext,audioContext=null,audioReady=false,soundEnabled=true;
   try{soundEnabled=window.localStorage.getItem('zapapi-chat-sounds')!=='off';}catch(error){}
@@ -228,24 +228,13 @@ header('X-Robots-Tag: noindex, nofollow');
     if(state==='error'){sendButton.disabled=sendButtonUnavailable;sendButton.setAttribute('aria-label','Falha no envio. Tentar novamente');sendButton.title=message||'Falha no envio. Revise e tente novamente.';return;}
     sendButton.disabled=sendButtonUnavailable;sendButton.setAttribute('aria-label','Enviar mensagem');sendButton.title='Enviar mensagem';
   }
-  function clearPendingDeliveryTimer(){if(pendingDeliveryTimer){window.clearTimeout(pendingDeliveryTimer);pendingDeliveryTimer=0;}}
-  function expirePendingDelivery(messageId){if(pendingDeliveryMessageId!==String(messageId))return;pendingDeliveryTimer=0;pendingDeliveryMessageId='';timedOutDeliveryMessageId=String(messageId);setSendButtonState('error','A Meta não confirmou a entrega após 2 minutos. Confira o status no chat antes de reenviar.');}
-  function watchPendingDelivery(messageId,createdAtEpoch){
-    clearPendingDeliveryTimer();pendingDeliveryMessageId=String(messageId);timedOutDeliveryMessageId='';
-    var createdAt=Number(createdAtEpoch)||Math.floor(Date.now()/1000),remaining=pendingDeliveryTimeoutMs-(Date.now()-createdAt*1000);
-    if(remaining<=0){expirePendingDelivery(pendingDeliveryMessageId);return;}
-    setSendButtonState('pending','Aguardando a entrega da mensagem…');
-    var watchedId=pendingDeliveryMessageId;pendingDeliveryTimer=window.setTimeout(function(){expirePendingDelivery(watchedId);},remaining);
-  }
-  function updatePendingDelivery(messages){
-    if(!sendButton)return;
-    if(timedOutDeliveryMessageId){var stale=messages.find(function(item){return String(item.id||'')===timedOutDeliveryMessageId;});if(stale&&['delivered','read'].includes(stale.status)){timedOutDeliveryMessageId='';setSendButtonState('ready');}else if(stale&&stale.status==='failed'){timedOutDeliveryMessageId='';setSendButtonState('error','A Meta não entregou a mensagem. Você pode tentar novamente.');}}
-    if(!pendingDeliveryMessageId)return;
-    var message=messages.find(function(item){return String(item.id||'')===pendingDeliveryMessageId;});if(!message)return;
-    if(message.status==='delivered'||message.status==='read'){clearPendingDeliveryTimer();pendingDeliveryMessageId='';setSendButtonState('ready');}
-    else if(message.status==='failed'){clearPendingDeliveryTimer();pendingDeliveryMessageId='';setSendButtonState('error','A Meta não entregou a mensagem. Você pode tentar novamente.');}
-    else if(message.status==='uncertain'){clearPendingDeliveryTimer();pendingDeliveryMessageId='';setSendButtonState('error','Não foi possível confirmar a entrega. Confira a conversa antes de reenviar.');}
-    else setSendButtonState('pending','Aguardando a entrega da mensagem…');
+  function updateTrackedDelivery(messages){
+    if(!sendButton||!trackedDeliveryMessageId)return;
+    var message=messages.find(function(item){return String(item.id||'')===trackedDeliveryMessageId;});if(!message)return;
+    if(message.status==='failed'){trackedDeliveryMessageId='';setSendButtonState('error','A Meta não entregou a mensagem. Você pode tentar novamente.');}
+    else if(message.status==='uncertain'){trackedDeliveryMessageId='';setSendButtonState('error','Não foi possível confirmar a entrega. Confira o status da mensagem.');}
+    else if(message.status==='delivered'||message.status==='read'){trackedDeliveryMessageId='';setSendButtonState('ready');}
+    else setSendButtonState('ready');
   }
   function conversationRow(row){var label=row.display_name||row.wa_id,a=node('a','convrow'+(selectedWa===row.wa_id?' selected':''));a.href=urlFor(row.wa_id);a.dataset.messageId=row.message_id;
     var avatar=node('span','avatar');setAvatar(avatar,label,row.has_photo,row.wa_id,row.photo_version);a.appendChild(avatar);
@@ -315,31 +304,31 @@ header('X-Robots-Tag: noindex, nofollow');
       if(!selectedWa){var incoming=data.conversations.find(function(row){return row.direction==='inbound'&&!seenMessages.has(row.message_id);});if(incoming){playIncomingBell();window.setTimeout(function(){window.location.assign(urlFor(incoming.wa_id));},450);return;}}
       data.conversations.forEach(function(row){seenMessages.add(row.message_id);});
       var nextConversations=JSON.stringify(data.conversations);if(nextConversations!==conversationSignature){renderConversations(data.conversations);conversationSignature=nextConversations;}
-      if(selectedWa&&data.selected_wa_id===selectedWa&&data.contact&&stream){var headerAvatar=document.querySelector('.chathead .avatar');if(headerAvatar)setAvatar(headerAvatar,data.contact.display_name||selectedWa,data.contact.has_photo,selectedWa,data.contact.photo_version);var nextMessages=JSON.stringify(data.messages);updatePendingDelivery(data.messages);if(nextMessages!==messageSignature){rememberMessages(data.messages);renderMessages(data.messages);messageSignature=nextMessages;}}
+      if(selectedWa&&data.selected_wa_id===selectedWa&&data.contact&&stream){var headerAvatar=document.querySelector('.chathead .avatar');if(headerAvatar)setAvatar(headerAvatar,data.contact.display_name||selectedWa,data.contact.has_photo,selectedWa,data.contact.photo_version);var nextMessages=JSON.stringify(data.messages);updateTrackedDelivery(data.messages);if(nextMessages!==messageSignature){rememberMessages(data.messages);renderMessages(data.messages);messageSignature=nextMessages;}}
     }catch(error){console.warn('Atualização automática da conversa falhou.',error);}
     finally{refreshing=false;}
   }
   document.querySelectorAll('[data-quick-reply]').forEach(function(select){select.addEventListener('change',function(){if(this.value){var field=document.querySelector('.composer textarea');if(field){field.value=this.value;field.focus();}}});});
   var composer=document.querySelector('.composer'),composerText=composer&&composer.querySelector('textarea'),fileInput=composer&&composer.querySelector('input[type="file"]'),fileName=composer&&composer.querySelector('[data-file-name]'),emojiToggle=composer&&composer.querySelector('[data-emoji-toggle]'),emojiPicker=composer&&composer.querySelector('[data-emoji-picker]');
   sendButton=composer&&composer.querySelector('button[type="submit"]');sendButtonUnavailable=!!(sendButton&&sendButton.disabled);sendButtonDefault=sendButton?sendButton.textContent.trim():'➤';
-  if(sendButton){var initialOutgoing=stream?Array.from(stream.querySelectorAll('.bubble[data-direction="outbound"]')):[],lastOutgoing=initialOutgoing[initialOutgoing.length-1];if(lastOutgoing&&['accepted','sent'].includes(lastOutgoing.dataset.status)){watchPendingDelivery(lastOutgoing.dataset.messageId,lastOutgoing.dataset.createdAt);}else if(lastOutgoing&&(lastOutgoing.dataset.status==='failed'||lastOutgoing.dataset.status==='uncertain'))setSendButtonState('error','A última mensagem não foi confirmada como entregue.');else setSendButtonState('ready');}
+  if(sendButton){var initialOutgoing=stream?Array.from(stream.querySelectorAll('.bubble[data-direction="outbound"]')):[],lastOutgoing=initialOutgoing[initialOutgoing.length-1];if(lastOutgoing){trackedDeliveryMessageId=lastOutgoing.dataset.messageId||'';if(lastOutgoing.dataset.status==='failed'||lastOutgoing.dataset.status==='uncertain')setSendButtonState('error','A última mensagem não foi confirmada. Você pode tentar novamente.');else setSendButtonState('ready');}else setSendButtonState('ready');}
   function clearSendError(){if(sendButtonState==='error')setSendButtonState('ready');}
   if(fileInput&&fileName)fileInput.addEventListener('change',function(){fileName.textContent=this.files&&this.files[0]?this.files[0].name:'';fileName.hidden=!fileName.textContent;clearSendError();});
   if(emojiToggle&&emojiPicker){emojiToggle.addEventListener('click',function(){var open=emojiPicker.hidden;emojiPicker.hidden=!open;emojiToggle.setAttribute('aria-expanded',String(open));});emojiPicker.addEventListener('click',function(event){var button=event.target.closest('[data-emoji]');if(!button||!composerText)return;var emoji=button.dataset.emoji,start=composerText.selectionStart,end=composerText.selectionEnd;composerText.setRangeText(emoji,start,end,'end');composerText.focus();emojiPicker.hidden=true;emojiToggle.setAttribute('aria-expanded','false');});document.addEventListener('pointerdown',function(event){if(!composer.contains(event.target)){emojiPicker.hidden=true;emojiToggle.setAttribute('aria-expanded','false');}});}
   if(composerText){composerText.addEventListener('input',clearSendError);composerText.addEventListener('keydown',function(event){if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();var submitButton=composer.querySelector('button[type="submit"]');if(!submitButton||!submitButton.disabled){if(composer.requestSubmit)composer.requestSubmit();}}});}
   if(stream)stream.scrollTop=stream.scrollHeight;
   if(composer)composer.addEventListener('submit',async function(event){
-    event.preventDefault();if(sending||!sendButton||sendButton.disabled)return;sending=true;clearPendingDeliveryTimer();pendingDeliveryMessageId='';timedOutDeliveryMessageId='';setSendButtonState('pending','Enviando mensagem à Meta…');
+    event.preventDefault();if(sending||!sendButton||sendButton.disabled)return;sending=true;trackedDeliveryMessageId='';setSendButtonState('pending','Enviando mensagem à Meta…');
     try{
       var response=await fetch(composer.getAttribute('action')||window.location.href,{method:'POST',body:new FormData(composer),credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
       if(new URL(response.url).pathname==='/entrar'){window.location.assign(response.url);return;}
       var data;try{data=await response.json();}catch(parseError){throw new Error('Não foi possível confirmar o envio da mensagem.');}
       if(!response.ok||!data.ok)throw new Error(data.error||'Não foi possível enviar a mensagem.');
-      pendingDeliveryMessageId=String(data.message&&data.message.id||'');
-      if(!pendingDeliveryMessageId)throw new Error('A Meta aceitou o envio, mas não retornou o identificador da mensagem. Confira o chat antes de tentar novamente.');
-      watchPendingDelivery(pendingDeliveryMessageId,Math.floor(Date.now()/1000));
+      trackedDeliveryMessageId=String(data.message&&data.message.id||'');
+      if(!trackedDeliveryMessageId)throw new Error('A Meta aceitou o envio, mas não retornou o identificador da mensagem. Confira o chat antes de tentar novamente.');
+      setSendButtonState('ready');
       var textarea=composer.querySelector('textarea'),file=composer.querySelector('input[type="file"]');if(textarea)textarea.value='';if(file)file.value='';if(fileName){fileName.textContent='';fileName.hidden=true;}
-    }catch(error){pendingDeliveryMessageId='';setSendButtonState('error',error.message||'Não foi possível enviar a mensagem. Revise e tente novamente.');}
+    }catch(error){trackedDeliveryMessageId='';setSendButtonState('error',error.message||'Não foi possível enviar a mensagem. Revise e tente novamente.');}
     finally{sending=false;refresh();}
   });
   refresh();setInterval(refresh,2000);document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')refresh();});
