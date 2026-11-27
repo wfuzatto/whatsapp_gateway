@@ -304,22 +304,24 @@ final class WhatsAppMetaPanel {
         $name=self::field($post,'key_name',100);
         $id=self::accountId($post);
         if(strlen($name)<3)throw new HttpError('Informe um nome para a chave (mínimo 3 caracteres).',422);
-        $a=self::account((int)$user['tenant_id'],$id);
-        $raw='wg_'.bin2hex(random_bytes(32));
-        $s=db()->prepare('INSERT INTO whatsapp_api_keys (tenant_id,account_id,name,token_hash) VALUES (?,?,?,?)');
-        $s->execute([$user['tenant_id'],$id,$name,hash('sha256',$raw)]);
-        audit($id,'api.key.created',['name'=>$name,'key_id'=>(int)db()->lastInsertId()]);
-        $_SESSION['whatsapp_meta_one_time_key']=$raw;
-        self::flash('Chave criada. Copie-a agora; não será exibida novamente.');
+        self::account((int)$user['tenant_id'],$id);
+        $scopes=$post['key_scopes']??[];
+        if(!is_array($scopes))throw new HttpError('Permissões inválidas.',422);
+        $scopes=array_values(array_unique(array_filter($scopes,'is_string')));
+        $days=(int)($post['key_expires_days']??90);
+        $created=WhatsAppApiSecurity::createToken((int)$user['tenant_id'],$id,$name,$scopes,$days);
+        audit($id,'api.token.created',['name'=>$name,'token_id'=>$created['id'],'scopes'=>$created['scopes'],'expires_at'=>$created['expires_at']]);
+        $_SESSION['whatsapp_meta_one_time_key']=$created['token'];
+        self::flash('Token criado. Copie-o agora; será mostrado somente uma vez e expirará em '.$days.' dias.');
     }
     private static function revokeKey(array $user,array $post): never {
         $key=self::field($post,'key_id',20);
         if(!ctype_digit($key))throw new HttpError('Chave inválida.',422);
-        $s=db()->prepare('UPDATE whatsapp_api_keys SET active=0
-                           WHERE tenant_id=? AND id=? AND active=1');
-        $s->execute([$user['tenant_id'],$key]);
-        if(!$s->rowCount())throw new HttpError('Chave não encontrada.',404);
-        self::flash('Chave de API revogada.');
+        $type=self::field($post,'credential_type',16);
+        if($type==='' )$type='legacy';
+        if(!WhatsAppApiSecurity::revoke((int)$user['tenant_id'],(int)$key,$type))
+            throw new HttpError('Chave não encontrada.',404);
+        self::flash($type==='token'?'Token de integração revogado.':'Chave legada revogada.');
     }
     private static function draftFromPost(): array {
         if(($_POST['action']??'')!=='submit')return [];
@@ -335,6 +337,7 @@ final class WhatsAppMetaPanel {
         return $draft;
     }
     private static function render(array $user,array $vars=[]): void {
+        WhatsAppApiSecurity::ensureSchema();
         $tenantId=(int)$user['tenant_id'];
         $accounts=self::listAccounts($tenantId);
         $selectedId=(int)($vars['draft']['account_id']??($_GET['conta']??0));
@@ -352,11 +355,18 @@ final class WhatsAppMetaPanel {
             }catch(MetaFailure $e){$listError=self::metaError($e)->getMessage();}
             catch(Throwable $e){$listError='Não foi possível consultar a Meta. Confira token e permissões.';}
         }
-        $keysSt=db()->prepare('SELECT k.id,k.name,k.active,k.created_at,a.name AS account_name
+        $legacySt=db()->prepare('SELECT k.id,k.name,k.active,k.created_at,NULL AS expires_at,NULL AS scopes_json,
+                "legacy" AS credential_type,a.name AS account_name
             FROM whatsapp_api_keys k LEFT JOIN whatsapp_accounts a
             ON a.id=k.account_id AND a.tenant_id=k.tenant_id
             WHERE k.tenant_id=? ORDER BY k.id DESC LIMIT 50');
-        $keysSt->execute([$tenantId]);$keys=$keysSt->fetchAll();
+        $legacySt->execute([$tenantId]);$keys=$legacySt->fetchAll();
+        $tokensSt=db()->prepare('SELECT k.id,k.name,k.active,k.created_at,k.expires_at,k.scopes_json,
+                "token" AS credential_type,a.name AS account_name
+            FROM whatsapp_api_tokens k JOIN whatsapp_accounts a ON a.id=k.account_id AND a.tenant_id=k.tenant_id
+            WHERE k.tenant_id=? ORDER BY k.id DESC LIMIT 50');
+        $tokensSt->execute([$tenantId]);$keys=array_merge($keys,$tokensSt->fetchAll());
+        usort($keys,static fn($a,$b)=>strcmp((string)$b['created_at'],(string)$a['created_at']));
         $flash=$_SESSION['whatsapp_meta_flash']??null;
         unset($_SESSION['whatsapp_meta_flash']);
         $oneTimeKey=$_SESSION['whatsapp_meta_one_time_key']??null;

@@ -59,8 +59,9 @@ final class WhatsAppFcm {
         return $result;
     }
 
-    public static function markConversationRead(int $tenantId,int $accountId,string $waId): int {
-        if($tenantId<1||$accountId<1||!validPhone($waId))throw new HttpError('Conversa inválida.',422);
+    public static function markConversationRead(int $tenantId,int $accountId,string $waId,?int $throughMessageId=null): int {
+        if($tenantId<1||$accountId<1||!validPhone($waId)||($throughMessageId!==null&&$throughMessageId<1))
+            throw new HttpError('Conversa inválida.',422);
         self::ensureReadCursorSchema();
         $pdo=db();$pdo->beginTransaction();
         try{
@@ -71,9 +72,19 @@ final class WhatsAppFcm {
                 WHERE tenant_id=? AND account_id=? AND wa_id=? FOR UPDATE');
             $cursorQuery->execute([$tenantId,$accountId,$waId]);
             $previous=(int)$cursorQuery->fetchColumn();
-            $latestQuery=$pdo->prepare("SELECT COALESCE(MAX(id),0) FROM whatsapp_messages
-                WHERE tenant_id=? AND account_id=? AND wa_id=? AND direction='inbound'");
-            $latestQuery->execute([$tenantId,$accountId,$waId]);
+            if($throughMessageId!==null){
+                $target=$pdo->prepare("SELECT id FROM whatsapp_messages WHERE tenant_id=? AND account_id=?
+                    AND wa_id=? AND id=? AND direction='inbound' LIMIT 1");
+                $target->execute([$tenantId,$accountId,$waId,$throughMessageId]);
+                if(!$target->fetchColumn())throw new HttpError('Mensagem recebida não pertence a esta conversa.',404);
+                $latestQuery=$pdo->prepare("SELECT COALESCE(MAX(id),0) FROM whatsapp_messages
+                    WHERE tenant_id=? AND account_id=? AND wa_id=? AND direction='inbound' AND id<=?");
+                $latestQuery->execute([$tenantId,$accountId,$waId,$throughMessageId]);
+            }else{
+                $latestQuery=$pdo->prepare("SELECT COALESCE(MAX(id),0) FROM whatsapp_messages
+                    WHERE tenant_id=? AND account_id=? AND wa_id=? AND direction='inbound'");
+                $latestQuery->execute([$tenantId,$accountId,$waId]);
+            }
             $through=max($previous,(int)$latestQuery->fetchColumn());
             if($through>$previous){
                 $pdo->prepare('UPDATE whatsapp_conversation_read_cursors SET last_read_message_id=?,updated_at=UTC_TIMESTAMP()

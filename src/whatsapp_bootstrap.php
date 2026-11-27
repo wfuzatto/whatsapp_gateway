@@ -100,22 +100,12 @@ function unseal(string $ciphertext): string {
  * ou vinculada a um numero especifico. Nunca confie em tenant_id do JSON enviado.
  */
 function bearerContext(): array {
-    $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-    if (!preg_match('/^Bearer\\s+([a-zA-Z0-9_-]{20,160})$/', $auth, $m))
-        throw new HttpError('Invalid or missing API token',401);
-    $s = db()->prepare("SELECT k.id AS key_id,k.tenant_id,k.account_id,t.slug AS tenant_slug
-        FROM whatsapp_api_keys k
-        JOIN whatsapp_tenants t ON t.id=k.tenant_id
-        WHERE k.token_hash=? AND k.active=1 AND t.status='active'
-        AND (NOT EXISTS(SELECT 1 FROM whatsapp_subscriptions s WHERE s.tenant_id=t.id)
-             OR EXISTS(SELECT 1 FROM whatsapp_subscriptions s WHERE s.tenant_id=t.id AND s.status='active'))
-        AND (k.account_id IS NULL OR EXISTS (
-             SELECT 1 FROM whatsapp_accounts a WHERE a.tenant_id=k.tenant_id
-               AND a.id=k.account_id AND a.status='active')) LIMIT 1");
-    $s->execute([hash('sha256',$m[1])]);
-    $context = $s->fetch();
-    if (!$context) throw new HttpError('Invalid or missing API token',401);
-    return $context;
+    require_once __DIR__.'/whatsapp_ApiSecurity.php';
+    return WhatsAppApiSecurity::authenticate();
+}
+function requireApiScope(array $context,string $scope,bool $allowLegacy=true): void {
+    require_once __DIR__.'/whatsapp_ApiSecurity.php';
+    WhatsAppApiSecurity::requireScope($context,$scope,$allowLegacy);
 }
 function selectedAccount(array $context, ?string $requestedPhoneId): array {
     $tenantId = (int)$context['tenant_id'];

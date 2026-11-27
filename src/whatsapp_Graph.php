@@ -45,5 +45,50 @@ final class Graph {
         if ($status < 200 || $status >= 300) throw new MetaFailure($status ?: 502, $data);
         return $data;
     }
+
+    /** Fetches an inbound Meta media object without exposing its signed URL or the Meta token. */
+    public static function downloadMedia(array $account,string $mediaId): array {
+        if(!preg_match('/^[A-Za-z0-9_-]{1,255}$/D',$mediaId))throw new HttpError('Invalid media id',422);
+        $meta=self::call($account,'GET',$mediaId);
+        $url=(string)($meta['url']??'');$parts=parse_url($url);
+        $host=strtolower((string)($parts['host']??''));
+        $trustedHost=preg_match('/(?:^|\\.)(?:facebook\\.com|fbcdn\\.net|fbsbx\\.com)$/D',$host)===1;
+        if(!$parts||($parts['scheme']??'')!=='https'||!$trustedHost||!empty($parts['user'])||!empty($parts['pass'])||
+            (isset($parts['port'])&&(int)$parts['port']!==443))
+            throw new HttpError('Meta returned an unsupported media location',502);
+        $max=max(1024,(int)config('MAX_MEDIA_DOWNLOAD_BYTES',config('MAX_UPLOAD_BYTES','104857600')));
+        $declared=filter_var($meta['file_size']??null,FILTER_VALIDATE_INT);
+        if($declared!==false&&$declared!==null&&(int)$declared>$max)throw new HttpError('Media exceeds configured download size',413);
+        $temp=tmpfile();
+        if($temp===false)throw new RuntimeException('Cannot create temporary media file');
+        try {
+            $size=0;$tooLarge=false;$ch=curl_init($url);
+            if($ch===false)throw new RuntimeException('Cannot initialize media download');
+            curl_setopt_array($ch,[
+                CURLOPT_RETURNTRANSFER=>false,CURLOPT_CONNECTTIMEOUT=>10,CURLOPT_TIMEOUT=>60,
+                CURLOPT_FOLLOWLOCATION=>false,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2,
+                CURLOPT_HTTPHEADER=>['Authorization: Bearer '.unseal($account['token_box']),'Accept: */*'],
+                CURLOPT_USERAGENT=>'ZapApi/1.0',
+                CURLOPT_WRITEFUNCTION=>static function($curl,string $chunk)use($temp,&$size,&$tooLarge,$max): int {
+                    $length=strlen($chunk);
+                    if($size+$length>$max){$tooLarge=true;return 0;}
+                    $written=fwrite($temp,$chunk);
+                    if($written!==$length)return 0;
+                    $size+=$written;return $written;
+                }
+            ]);
+            $ok=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_RESPONSE_CODE);
+            $mime=(string)(curl_getinfo($ch,CURLINFO_CONTENT_TYPE)?:($meta['mime_type']??''));
+            $error=curl_error($ch);curl_close($ch);
+            if($tooLarge)throw new HttpError('Media exceeds configured download size',413);
+            if($ok===false||$status<200||$status>=300)
+                throw new MetaFailure($status?:502,['error'=>['message'=>$error!==''?'Media download failed':'Meta media request failed']],false);
+            rewind($temp);$head=fread($temp,min($size,16384));rewind($temp);
+            $detected=(new finfo(FILEINFO_MIME_TYPE))->buffer(is_string($head)?$head:'');
+            if(is_string($detected)&&preg_match('~^[a-z0-9.+-]+/[a-z0-9.+-]+$~iD',$detected))$mime=$detected;
+            if(!preg_match('~^[a-z0-9.+-]+/[a-z0-9.+-]+$~iD',$mime))$mime='application/octet-stream';
+            return ['stream'=>$temp,'mime_type'=>$mime,'file_size'=>$size];
+        }catch(Throwable $e){fclose($temp);throw $e;}
+    }
 }
 function mbTrim(string $s): string { return substr($s, 0, 4096); }

@@ -3,6 +3,7 @@ APP_ENV=production
 APP_REQUIRE_HTTPS=1
 APP_BASE_PATH=
 GRAPH_VERSION=v26.0
+MCP_ALLOWED_ORIGINS=https://zapapi.inf.br
 DB_HOST=zapapi1.mysql.dbaas.com.br
 DB_PORT=3306
 DB_NAME=zapapi1
@@ -24,6 +25,7 @@ FCM_SERVICE_ACCOUNT_FILE=
 # A senha real nao deve ser adicionada ao Git nem ao arquivo de exemplo.
 # Limite do corpo JSON: 4 MB; maximo upload: 100 MB (ver limites do PHP e Meta).
 MAX_BODY_BYTES=4194304
+MAX_API_EVENT_PAGE_BYTES=2097152
 MAX_UPLOAD_BYTES=104857600
 # Caso esteja atras de proxy HTTPS confiavel:
 TRUST_PROXY=0

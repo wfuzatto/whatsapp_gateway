@@ -22,6 +22,27 @@ $advancedExample=json_encode([
  ['type'=>'FOOTER','code_expiration_minutes'=>10],
  ['type'=>'BUTTONS','buttons'=>[['type'=>'OTP','otp_type'=>'COPY_CODE','text'=>'Copiar código']]]]
 ],JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+$apiScopeLabels=[
+ 'mcp:connect'=>'Conectar via MCP',
+ 'tenant:read'=>'Consultar empresa',
+ 'accounts:read'=>'Listar números conectados',
+ 'conversations:read'=>'Ler conversas',
+ 'conversations:mark_read'=>'Marcar conversa como lida e sincronizar APK',
+ 'messages:read'=>'Ler mensagens',
+ 'messages:read_receipt'=>'Enviar confirmação de leitura à Meta',
+ 'messages:send'=>'Enviar mensagens e templates aprovados',
+ 'templates:read'=>'Consultar templates',
+ 'templates:manage'=>'Criar, editar e remover templates',
+ 'contacts:read'=>'Consultar contatos',
+ 'contacts:consent'=>'Alterar consentimento de contatos',
+ 'events:read'=>'Receber eventos e mensagens novas',
+ 'jobs:read'=>'Consultar envios e status',
+ 'jobs:retry'=>'Reenfileirar envios (pode duplicar)',
+ 'media:upload'=>'Enviar arquivos para a Meta',
+ 'media:read'=>'Baixar mídias recebidas',
+ 'media:delete'=>'Remover mídia da Meta',
+ 'meta:manage'=>'Administrar telefone, perfil, webhooks e Flows'
+];
 ?>
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><link rel="icon" type="image/svg+xml" href="/whatsapp_assets/whatsapp_zapapi_favicon.svg">
@@ -73,6 +94,11 @@ label small{display:block;font-weight:450;color:#799086;font-size:.76rem;margin-
 .details{border:1px solid #e2ece6;border-radius:12px;padding:15px;background:#fafdfb;margin-top:16px}
 summary{font-size:.9rem;font-weight:800;cursor:pointer}
 details[open] summary{margin-bottom:15px}
+.api-scope-grid{border:1px solid #dbe8e1;border-radius:11px;padding:13px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 14px;margin:0}
+.api-scope-grid legend{font-weight:800;color:#34584b;font-size:.82rem;padding:0 5px}
+.api-scope-grid label{display:flex;align-items:flex-start;gap:7px;font-size:.78rem!important;font-weight:600!important;line-height:1.4}
+.api-scope-grid input[type=checkbox]{width:16px;height:16px;flex:0 0 16px;margin:1px 0 0;accent-color:#0b6f52}
+@media(max-width:700px){.api-scope-grid{grid-template-columns:1fr}}
 .steplist{margin:0;padding-left:20px;color:#4d675c;font-size:.87rem;line-height:1.85}
 hr{border:0;border-top:1px solid #e5eee8;margin:19px 0}
 a.link{color:#087855;text-decoration:underline}
@@ -213,21 +239,24 @@ footer{max-width:1180px;margin:0 auto 25px;padding:0 24px;color:#72887d;font-siz
 <div class="notice warn" style="margin-top:16px;margin-bottom:0">Assine o WABA no mesmo aplicativo cujo App Secret está configurado no servidor. Tokens emitidos por outro aplicativo podem gerar uma assinatura diferente e os eventos serão recusados.</div>
 </section>
 <section class="box" id="api"><h2>6. Chaves de API do seu tenant</h2>
-<p class="help">Use uma chave exclusiva em cada integração de ERP, sistema de reservas ou automação. Ela será mostrada apenas uma vez.</p>
+<p class="help">Gere um token diferente para cada sistema. O token é aleatório, armazenado somente como hash, limitado a este número e mostrado uma única vez. Selecione apenas as permissões necessárias.</p>
 <?php if($accounts): ?><form class="form" action="/painel/meta" method="post">
 <input type="hidden" name="csrf" value="<?=metaE($csrf)?>"><input type="hidden" name="action" value="key_create">
 <label>Nome da integração <input name="key_name" maxlength="100" placeholder="ERP principal" required></label>
 <label>Número autorizado <select name="account_id"><?php foreach($accounts as $a): ?><option value="<?=metaE($a['id'])?>"><?=metaE($a['name'].' · '.$a['phone_number_id'])?></option><?php endforeach; ?></select></label>
-<button class="btn" type="submit" <?=$active?'':'disabled'?>>Gerar chave de API</button>
+<label>Validade do token <select name="key_expires_days"><option value="30">30 dias</option><option value="90" selected>90 dias</option><option value="180">180 dias</option><option value="365">365 dias</option></select></label>
+<fieldset class="api-scope-grid"><legend>Permissões</legend><?php foreach($apiScopeLabels as $scope=>$label): $checked=in_array($scope,['mcp:connect','accounts:read','conversations:read','conversations:mark_read','messages:read','messages:send','templates:read','events:read','jobs:read'],true); ?><label><input type="checkbox" name="key_scopes[]" value="<?=metaE($scope)?>" <?=$checked?'checked':''?>> <span><?=metaE($label)?></span></label><?php endforeach; ?></fieldset>
+<button class="btn" type="submit" <?=$active?'':'disabled'?>>Gerar token de integração</button>
 </form><?php else: ?><div class="notice warn">Conecte um número para criar uma chave específica.</div><?php endif; ?>
 <?php if($keys): ?><hr><h3>Chaves existentes</h3>
-<?php foreach($keys as $k): ?><div class="summaryrow"><div><strong><?=metaE($k['name'])?></strong>
-<small><?=metaE($k['account_name']??'Todo tenant')?> · <?=metaE($k['created_at'])?> · <?=($k['active']?'Ativa':'Revogada')?></small></div>
+<?php foreach($keys as $k): $keyScopes=is_string($k['scopes_json']??null)?json_decode($k['scopes_json'],true):null; ?><div class="summaryrow"><div><strong><?=metaE($k['name'])?></strong>
+<small><?=metaE($k['account_name']??'Todo tenant')?> · <?=metaE($k['created_at'])?> · <?=($k['active']?'Ativa':'Revogada')?></small>
+<?php if(($k['credential_type']??'')==='token'): ?><small>Expira: <?=metaE($k['expires_at'])?> · Escopos: <?=metaE(implode(', ',is_array($keyScopes)?$keyScopes:[]))?></small><?php else: ?><small style="color:#9a5a17">Chave legada sem expiração e sem escopos. Substitua por token limitado e revogue esta chave.</small><?php endif; ?></div>
 <?php if($k['active']): ?><form method="post" action="/painel/meta">
-<input type="hidden" name="csrf" value="<?=metaE($csrf)?>"><input type="hidden" name="action" value="key_revoke"><input type="hidden" name="key_id" value="<?=metaE($k['id'])?>">
+<input type="hidden" name="csrf" value="<?=metaE($csrf)?>"><input type="hidden" name="action" value="key_revoke"><input type="hidden" name="credential_type" value="<?=metaE($k['credential_type'])?>"><input type="hidden" name="key_id" value="<?=metaE($k['id'])?>">
 <button class="btn tiny light" type="submit">Revogar</button></form><?php endif; ?></div><?php endforeach; ?>
 <?php endif; ?>
-<p class="help" style="margin-top:19px">Exemplo de autenticação: <span class="codeinline">Authorization: Bearer wg_...</span>. O token Meta e a chave do gateway são diferentes.</p>
+<p class="help" style="margin-top:19px">Use o token como <span class="codeinline">Authorization: Bearer wg_...</span>. Endpoint MCP: <span class="codeinline">https://zapapi.inf.br/mcp</span>. <a class="link" href="/mcp-docs">Documentação e exemplos do MCP</a>. O token é independente do token Meta. Tokens REST antigos continuam ativos até revogação; para MCP, gere um novo token com “Conectar via MCP” e revogue as chaves legadas.</p>
 </section>
 </div>
 </main>

@@ -10,6 +10,9 @@ require dirname(__DIR__) . '/src/whatsapp_Installer.php';
 require dirname(__DIR__) . '/src/whatsapp_MetaPanel.php';
 require dirname(__DIR__) . '/src/whatsapp_Mobile.php';
 require dirname(__DIR__) . '/src/whatsapp_Console.php';
+require dirname(__DIR__) . '/src/whatsapp_ApiSecurity.php';
+require dirname(__DIR__) . '/src/whatsapp_IntegrationService.php';
+require dirname(__DIR__) . '/src/whatsapp_Mcp.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -19,6 +22,15 @@ header('Cache-Control: no-store');
 function limitNumber(mixed $value, int $max = 100): int {
     $n = filter_var($value, FILTER_VALIDATE_INT);
     return $n === false ? 50 : min($max,max(1,$n));
+}
+function apiCursor(mixed $value,int $default): int {
+    if($value===null)return $default;
+    if(!is_string($value)&&!is_int($value))throw new HttpError('Cursor inválido.',422);
+    $raw=(string)$value;
+    if(!preg_match('/^(0|[1-9][0-9]{0,18})$/D',$raw))throw new HttpError('Cursor inválido.',422);
+    $parsed=filter_var($raw,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+    if($parsed===false)throw new HttpError('Cursor fora do limite suportado.',422);
+    return (int)$parsed;
 }
 function getList(string $sql, array $params, int $max = 100): array {
     $limit = limitNumber($_GET['limit'] ?? 50,$max);
@@ -50,6 +62,13 @@ try {
         $path = substr($path,strlen($base)) ?: '/';
     }
     $path = rtrim($path,'/') ?: '/';
+
+    if ($method === 'GET' && $path === '/mcp-docs') {
+        require dirname(__DIR__) . '/public/whatsapp_mcp_docs.php';
+        exit;
+    }
+
+    if (WhatsAppMcp::route($path,$method)) exit;
 
     // Fallback em ambientes que encaminham URLs de arquivos legais ao front controller.
     // Somente arquivos da lista fixa podem ser carregados, sem entrada arbitraria.
@@ -93,48 +112,73 @@ try {
     $context = bearerContext();
     $tenantId = (int)$context['tenant_id'];
     if ($path === '/v1/tenant' && $method === 'GET') {
+        requireApiScope($context,'tenant:read');
         $st = db()->prepare("SELECT id,slug,name,status,created_at FROM whatsapp_tenants WHERE id=?");
         $st->execute([$tenantId]);
         response(200,$st->fetch());
     }
     if ($path === '/v1/accounts' && $method === 'GET') {
-        $sql = "SELECT id,name,waba_id,phone_number_id,status,created_at
-                FROM whatsapp_accounts WHERE tenant_id=?";
-        $args = [$tenantId];
-        if ($context['account_id'] !== null) {
-            $sql .= " AND id=?";
-            $args[] = $context['account_id'];
-        }
-        $sql .= " ORDER BY id";
-        $st = db()->prepare($sql);
-        $st->execute($args);
-        response(200,['data'=>$st->fetchAll()]);
+        requireApiScope($context,'accounts:read');
+        response(200,['data'=>WhatsAppIntegrationService::accounts($context)]);
     }
     $account = selectedAccount($context, $_SERVER['HTTP_X_WHATSAPP_PHONE_ID'] ?? null);
     $accountId = (int)$account['id'];
     $waba = $account['waba_id'];
     $phone = $account['phone_number_id'];
 
-    if ($path === '/v1/me' && $method === 'GET')
+    if ($path === '/v1/me' && $method === 'GET') {
+        requireApiScope($context,'accounts:read');
         response(200,['tenant_id'=>$tenantId,'tenant_slug'=>$context['tenant_slug'],'account_id'=>$accountId,'name'=>$account['name'],'waba_id'=>$waba,
                       'phone_number_id'=>$phone,'graph_version'=>config('GRAPH_VERSION','v26.0')]);
+    }
+
+    if ($path === '/v1/conversations' && $method === 'GET') {
+        requireApiScope($context,'conversations:read');
+        $before=apiCursor($_GET['before_id']??null,PHP_INT_MAX);
+        $search=isset($_GET['q'])&&is_string($_GET['q'])?substr(trim($_GET['q']),0,120):'';
+        response(200,['data'=>WhatsAppIntegrationService::conversations($context,$account,$search,$before,
+            limitNumber($_GET['limit']??50,100))]);
+    }
+    if (preg_match('~^/v1/conversations/([0-9]{7,20})/messages$~D',$path,$m)&&$method==='GET') {
+        requireApiScope($context,'messages:read');
+        $before=apiCursor($_GET['before_id']??null,PHP_INT_MAX);
+        response(200,['data'=>WhatsAppIntegrationService::messages($context,$account,$m[1],$before,
+            limitNumber($_GET['limit']??50,100))]);
+    }
+    if (preg_match('~^/v1/conversations/([0-9]{7,20})/read$~D',$path,$m)&&$method==='POST') {
+        requireApiScope($context,'conversations:mark_read');
+        WhatsAppApiSecurity::rateLimit($context,'write',30);
+        $body=requestJson();$id=$body['message_id']??null;
+        if(!is_string($id)&&!is_int($id))throw new HttpError('message_id obrigatório.',422);
+        $id=apiCursor($id,0);if($id<1)throw new HttpError('message_id inválido.',422);
+        $result=WhatsAppIntegrationService::markConversationRead($context,$account,$m[1],$id);
+        response(200,['ok'=>true,'read_through_id'=>$result['read_through_id'],'advanced'=>$result['advanced']]);
+    }
 
     if ($path === '/v1/messages' && $method === 'POST') {
+        requireApiScope($context,'messages:send');
+        WhatsAppApiSecurity::rateLimit($context,'write',30);
         $data = Rules::normaliseMessage(requestJson());
         Rules::ensureConsentAndWindow($account,$data);
+        WhatsAppIntegrationService::assertApprovedTemplate($account,$data);
         if (($_GET['sync'] ?? '') === '1') {
+            if (!empty($context['scoped'])) throw new HttpError('Tokens de integração usam somente envio assíncrono idempotente.',422);
             if (isset($_SERVER['HTTP_IDEMPOTENCY_KEY'])) throw new HttpError('Use async mode for Idempotency-Key',422);
             $result = Graph::call($account,'POST',$phone.'/messages',$data);
             Rules::storeOutgoing($account,$data,$result);
             audit($accountId,'message.sent',['to'=>$data['to'],'type'=>$data['type']]);
             response(200,$result);
         }
-        $key = $_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? ('auto-' . bin2hex(random_bytes(16)));
+        $key = $_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? '';
+        if($key===''&&!empty($context['scoped']))throw new HttpError('Idempotency-Key obrigatório para tokens de integração.',422);
+        if($key==='')$key='auto-' . bin2hex(random_bytes(16));
         $result = Jobs::enqueueSend($account,$data,$key);
-        audit($accountId,'message.queued',['job_id'=>$result['job_id'],'type'=>$data['type']]);
+        audit($accountId,'message.queued',['job_id'=>$result['job_id'],'type'=>$data['type'],'credential_id'=>(int)$context['key_id']]);
         response(202,$result);
     }
     if ($path === '/v1/messages/read' && $method === 'POST') {
+        requireApiScope($context,'messages:read_receipt');
+        WhatsAppApiSecurity::rateLimit($context,'write',30);
         $data = requestJson();
         $id = $data['message_id'] ?? '';
         if (!is_string($id) || !preg_match('/^[A-Za-z0-9._:-]{5,255}$/D',$id)) throw new HttpError('Invalid message_id');
@@ -143,14 +187,24 @@ try {
         response(200,Graph::call($account,'POST',$phone.'/messages',$body));
     }
     if ($path === '/v1/messages' && $method === 'GET') {
-        $before = (int)($_GET['before_id'] ?? PHP_INT_MAX);
+        requireApiScope($context,'messages:read');
+        $before = apiCursor($_GET['before_id']??null,PHP_INT_MAX);
+        $waId=$_GET['wa_id']??null;
+        if($waId!==null){
+            if(!is_string($waId)||!validPhone($waId))throw new HttpError('wa_id inválido.',422);
+            response(200,['data'=>WhatsAppIntegrationService::messages($context,$account,$waId,$before,limitNumber($_GET['limit']??50,100))]);
+        }
         response(200,['data'=>getList('SELECT id,wa_id,direction,whatsapp_id,message_type,status,payload,meta_response,created_at
           FROM whatsapp_messages WHERE tenant_id=? AND account_id=? AND id<? ORDER BY id DESC',[$tenantId,$accountId,$before])]);
     }
-    if ($path === '/v1/contacts' && $method === 'GET')
+    if ($path === '/v1/contacts' && $method === 'GET') {
+        requireApiScope($context,'contacts:read');
         response(200,['data'=>getList('SELECT id,wa_id,display_name,opt_in_at,opt_in_source,last_inbound_at
           FROM whatsapp_contacts WHERE tenant_id=? AND account_id=? ORDER BY id DESC',[$tenantId,$accountId])]);
+    }
     if ($path === '/v1/contacts/consent' && $method === 'POST') {
+        requireApiScope($context,'contacts:consent');
+        WhatsAppApiSecurity::rateLimit($context,'write',30);
         $data = requestJson();
         $waId = (string)($data['wa_id'] ?? '');
         if (!validPhone($waId) || !is_bool($data['consent'] ?? null))
@@ -167,12 +221,21 @@ try {
         response(200,['ok'=>true,'wa_id'=>$waId,'consent'=>$consent]);
     }
     if ($path === '/v1/events' && $method === 'GET') {
-        $before = (int)($_GET['before_id'] ?? PHP_INT_MAX);
+        requireApiScope($context,'events:read');
+        if(isset($_GET['after_id'])||!empty($context['scoped'])){
+            $after=0;
+            if(isset($_GET['after_id'])){
+                $after=apiCursor($_GET['after_id'],0);
+            }
+            response(200,WhatsAppIntegrationService::events($context,$account,$after,limitNumber($_GET['limit']??50,100)));
+        }
+        $before = apiCursor($_GET['before_id']??null,PHP_INT_MAX);
         response(200,['data'=>getList('SELECT id,event_key,event_type,payload,received_at
           FROM whatsapp_webhook_events WHERE tenant_id=? AND account_id=? AND id<? ORDER BY id DESC',[$tenantId,$accountId,$before])]);
     }
     if (preg_match('~^/v1/jobs/([0-9]+)$~D',$path,$m)) {
         if ($method === 'GET') {
+            requireApiScope($context,'jobs:read');
             $s = db()->prepare('SELECT id,kind,idempotency_key,status,attempts,max_attempts,
                          next_attempt_at,last_error,response,created_at,updated_at FROM whatsapp_jobs WHERE id=? AND tenant_id=? AND account_id=?');
             $s->execute([$m[1],$tenantId,$accountId]);
@@ -181,6 +244,8 @@ try {
             response(200,$job);
         }
         if ($method === 'POST' && ($_GET['action'] ?? '') === 'retry') {
+            requireApiScope($context,'jobs:retry');
+            WhatsAppApiSecurity::rateLimit($context,'write',30);
             $s = db()->prepare("UPDATE whatsapp_jobs SET status='queued',attempts=0,next_attempt_at=UTC_TIMESTAMP(),locked_at=NULL
                   WHERE id=? AND tenant_id=? AND account_id=? AND status IN ('failed','uncertain')");
             $s->execute([$m[1],$tenantId,$accountId]);
@@ -190,33 +255,58 @@ try {
         }
     }
     if ($path === '/v1/media' && $method === 'POST') {
+        requireApiScope($context,'media:upload');
+        WhatsAppApiSecurity::rateLimit($context,'write',30);
         $media = checkUpload();
         response(200,Graph::call($account,'POST',$phone.'/media',null,[],
                 ['messaging_product'=>'whatsapp','file'=>$media]));
     }
+    if (preg_match('~^/v1/media/([A-Za-z0-9_-]{1,255})/content$~D',$path,$m)&&$method==='GET') {
+        requireApiScope($context,'media:read');
+        $media=Graph::downloadMedia($account,$m[1]);
+        header('Content-Type: '.$media['mime_type']);
+        header('Content-Disposition: attachment; filename="whatsapp-media"');
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: private, no-store');
+        header('Content-Length: '.(int)$media['file_size']);
+        fpassthru($media['stream']);fclose($media['stream']);exit;
+    }
     if (preg_match('~^/v1/media/([0-9]+)$~D',$path,$m)) {
-        if ($method === 'GET') response(200,Graph::call($account,'GET',$m[1]));
-        if ($method === 'DELETE') response(200,Graph::call($account,'DELETE',$m[1]));
+        if ($method === 'GET') {
+            requireApiScope($context,'media:read');
+            $metadata=Graph::call($account,'GET',$m[1]);
+            unset($metadata['url']); // URL assinado da CDN funciona como credencial temporária.
+            response(200,$metadata);
+        }
+        if ($method === 'DELETE') {requireApiScope($context,'media:delete');WhatsAppApiSecurity::rateLimit($context,'write',30);response(200,Graph::call($account,'DELETE',$m[1]));}
     }
     if ($path === '/v1/templates') {
         if ($method === 'GET') {
-            $q = ['limit'=>limitNumber($_GET['limit'] ?? 50,100)];
-            if (isset($_GET['name'])) $q['name'] = (string)$_GET['name'];
-            response(200,Graph::call($account,'GET',$waba.'/message_templates',null,$q));
+            requireApiScope($context,'templates:read');
+            $name=isset($_GET['name'])&&is_string($_GET['name'])?substr($_GET['name'],0,128):null;
+            $after=isset($_GET['after'])&&is_string($_GET['after'])?$_GET['after']:null;
+            response(200,WhatsAppIntegrationService::templates($account,limitNumber($_GET['limit']??50,100),$name,$after));
         }
-        if ($method === 'POST') response(200,Graph::call($account,'POST',$waba.'/message_templates',requestJson()));
+        if ($method === 'POST') {requireApiScope($context,'templates:manage');WhatsAppApiSecurity::rateLimit($context,'write',30);response(200,Graph::call($account,'POST',$waba.'/message_templates',requestJson()));}
         if ($method === 'DELETE') {
+            requireApiScope($context,'templates:manage');
+            WhatsAppApiSecurity::rateLimit($context,'write',30);
             $name = (string)($_GET['name'] ?? '');
             if (!preg_match('/^[a-z0-9_]{1,512}$/D',$name)) throw new HttpError('Template name required');
             response(200,Graph::call($account,'DELETE',$waba.'/message_templates',null,['name'=>$name]));
         }
     }
-    if (preg_match('~^/v1/templates/([0-9]+)$~D',$path,$m) && $method === 'POST')
+    if (preg_match('~^/v1/templates/([0-9]+)$~D',$path,$m) && $method === 'POST') {
+        requireApiScope($context,'templates:manage');WhatsAppApiSecurity::rateLimit($context,'write',30);
         response(200,Graph::call($account,'POST',$m[1],requestJson()));
-    if ($path === '/v1/phone' && $method === 'GET')
+    }
+    if ($path === '/v1/phone' && $method === 'GET') {
+        requireApiScope($context,'meta:manage');
         response(200,Graph::call($account,'GET',$phone,null,
             ['fields'=>'display_phone_number,verified_name,quality_rating,status']));
+    }
     if ($path === '/v1/phone/register' && $method === 'POST') {
+        requireApiScope($context,'meta:manage');WhatsAppApiSecurity::rateLimit($context,'write',30);
         $body = requestJson();
         $pin = $body['pin'] ?? null;
         if (!is_string($pin) || !preg_match('/^[0-9]{6}$/D',$pin)) throw new HttpError('6-digit registration PIN required');
@@ -225,39 +315,49 @@ try {
             ['messaging_product'=>'whatsapp','pin'=>$pin]));
     }
     if ($path === '/v1/phone/deregister' && $method === 'POST') {
+        requireApiScope($context,'meta:manage');WhatsAppApiSecurity::rateLimit($context,'write',30);
         $body = requestJson();
         if (($body['confirm'] ?? '') !== 'DEREGISTER') throw new HttpError('Explicit confirm=DEREGISTER required',422);
         audit($accountId,'phone.deregister.requested',['phone_number_id'=>$phone]);
         response(200,Graph::call($account,'POST',$phone.'/deregister'));
     }
     if ($path === '/v1/webhook-subscriptions') {
+        requireApiScope($context,'meta:manage');
         if ($method === 'GET') response(200,Graph::call($account,'GET',$waba.'/subscribed_apps'));
         if ($method === 'POST') {
+            WhatsAppApiSecurity::rateLimit($context,'write',30);
             audit($accountId,'waba.subscribe.requested');
             response(200,Graph::call($account,'POST',$waba.'/subscribed_apps'));
         }
         if ($method === 'DELETE') {
+            WhatsAppApiSecurity::rateLimit($context,'write',30);
             audit($accountId,'waba.unsubscribe.requested');
             response(200,Graph::call($account,'DELETE',$waba.'/subscribed_apps'));
         }
     }
     if ($path === '/v1/phone-numbers' && $method === 'GET')
+        {requireApiScope($context,'meta:manage');
         response(200,Graph::call($account,'GET',$waba.'/phone_numbers'));
+        }
     if ($path === '/v1/business-profile') {
+        requireApiScope($context,'meta:manage');
         if ($method === 'GET') response(200,Graph::call($account,'GET',$phone.'/whatsapp_business_profile',null,
             ['fields'=>'about,address,description,email,profile_picture_url,websites,vertical']));
-        if ($method === 'POST') response(200,Graph::call($account,'POST',$phone.'/whatsapp_business_profile',requestJson()));
+        if ($method === 'POST') {WhatsAppApiSecurity::rateLimit($context,'write',30);response(200,Graph::call($account,'POST',$phone.'/whatsapp_business_profile',requestJson()));}
     }
     if ($path === '/v1/flows') {
+        requireApiScope($context,'meta:manage');
         if ($method === 'GET') response(200,Graph::call($account,'GET',$waba.'/flows'));
-        if ($method === 'POST') response(200,Graph::call($account,'POST',$waba.'/flows',requestJson()));
+        if ($method === 'POST') {WhatsAppApiSecurity::rateLimit($context,'write',30);response(200,Graph::call($account,'POST',$waba.'/flows',requestJson()));}
     }
     if (preg_match('~^/v1/flows/([0-9]+)$~D',$path,$m)) {
+        requireApiScope($context,'meta:manage');
         if ($method === 'GET') response(200,Graph::call($account,'GET',$m[1]));
-        if ($method === 'POST') response(200,Graph::call($account,'POST',$m[1],requestJson()));
-        if ($method === 'DELETE') response(200,Graph::call($account,'DELETE',$m[1]));
+        if ($method === 'POST') {WhatsAppApiSecurity::rateLimit($context,'write',30);response(200,Graph::call($account,'POST',$m[1],requestJson()));}
+        if ($method === 'DELETE') {WhatsAppApiSecurity::rateLimit($context,'write',30);response(200,Graph::call($account,'DELETE',$m[1]));}
     }
     if ($path === '/v1/graph' && $method === 'GET') {
+        requireApiScope($context,'meta:manage');
         // Lista de edges permitidas; impossivel apontar o cliente a um host arbitrario.
         $scope = $_GET['scope'] ?? 'waba';
         $edge = $_GET['edge'] ?? '';
