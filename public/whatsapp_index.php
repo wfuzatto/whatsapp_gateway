@@ -10,7 +10,7 @@ require dirname(__DIR__) . '/src/whatsapp_Installer.php';
 require dirname(__DIR__) . '/src/whatsapp_MetaPanel.php';
 require dirname(__DIR__) . '/src/whatsapp_Mobile.php';
 require dirname(__DIR__) . '/src/whatsapp_Console.php';
-require dirname(__DIR__) . '/src/whatsapp_ApiSecurity.php';
+require_once dirname(__DIR__) . '/src/whatsapp_ApiSecurity.php';
 require dirname(__DIR__) . '/src/whatsapp_IntegrationService.php';
 require dirname(__DIR__) . '/src/whatsapp_Mcp.php';
 
