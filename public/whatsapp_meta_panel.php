@@ -239,14 +239,27 @@ footer{max-width:1180px;margin:0 auto 25px;padding:0 24px;color:#72887d;font-siz
 <div class="notice warn" style="margin-top:16px;margin-bottom:0">Assine o WABA no mesmo aplicativo cujo App Secret está configurado no servidor. Tokens emitidos por outro aplicativo podem gerar uma assinatura diferente e os eventos serão recusados.</div>
 </section>
 <section class="box" id="api"><h2>6. Chaves de API do seu tenant</h2>
-<p class="help">O token inicial da ZapAPI é criado automaticamente no cadastro e mostrado uma única vez no painel principal. Para integrações adicionais, gere tokens limitados a um número e selecione apenas as permissões necessárias. Após a exibição, somente o hash do token é armazenado.</p>
+<p class="help">O token inicial da ZapAPI é criado automaticamente no cadastro. Consulte ou copie seu token abaixo; ele pertence exclusivamente à sua empresa. Para integrações adicionais, gere tokens limitados a um número e selecione apenas as permissões necessárias.</p>
+<?php if($initialApiToken): ?>
+<div class="notice ok"><strong>Meu token ZapAPI (MCP e API)</strong><p style="margin:6px 0">Validade inicial de 90 dias. A operação exige assinatura ativa e, quando necessário, número conectado.</p>
+<label for="zapapi-initial-token">Token de integração</label>
+<input class="mono" id="zapapi-initial-token" type="password" readonly autocomplete="off" spellcheck="false" value="<?=metaE($initialApiToken)?>">
+<div class="buttonrow" style="margin-top:10px"><button class="btn tiny light" type="button" id="zapapi-token-reveal">Mostrar token</button><button class="btn tiny" type="button" id="zapapi-token-copy">Copiar token</button><span id="zapapi-token-status" role="status" aria-live="polite"></span></div></div>
+<script>
+(function(){
+ const field=document.getElementById('zapapi-initial-token'), reveal=document.getElementById('zapapi-token-reveal'), copy=document.getElementById('zapapi-token-copy'), status=document.getElementById('zapapi-token-status');
+ reveal.addEventListener('click',()=>{field.type=field.type==='password'?'text':'password';reveal.textContent=field.type==='password'?'Mostrar token':'Ocultar token';});
+ copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(field.value);status.textContent='Token copiado!';}catch(e){field.type='text';reveal.textContent='Ocultar token';field.focus();field.select();status.textContent='Selecione e copie o token manualmente.';}});
+})();
+</script>
+<?php else: ?><div class="notice warn">Não há token inicial consultável. Tokens antigos gravados somente como hash não podem ser recuperados; tokens expirados ou revogados não são reativados automaticamente. Se necessário, crie um novo token de integração abaixo.</div><?php endif; ?>
 <?php if($accounts): ?><form class="form" action="/painel/meta" method="post">
 <input type="hidden" name="csrf" value="<?=metaE($csrf)?>"><input type="hidden" name="action" value="key_create">
 <label>Nome da integração <input name="key_name" maxlength="100" placeholder="ERP principal" required></label>
 <label>Número autorizado <select name="account_id"><?php foreach($accounts as $a): ?><option value="<?=metaE($a['id'])?>"><?=metaE($a['name'].' · '.$a['phone_number_id'])?></option><?php endforeach; ?></select></label>
 <label>Validade do token <select name="key_expires_days"><option value="30">30 dias</option><option value="90" selected>90 dias</option><option value="180">180 dias</option><option value="365">365 dias</option></select></label>
 <fieldset class="api-scope-grid"><legend>Permissões</legend><?php foreach($apiScopeLabels as $scope=>$label): $checked=in_array($scope,['mcp:connect','accounts:read','conversations:read','conversations:mark_read','messages:read','messages:send','templates:read','events:read','jobs:read'],true); ?><label><input type="checkbox" name="key_scopes[]" value="<?=metaE($scope)?>" <?=$checked?'checked':''?>> <span><?=metaE($label)?></span></label><?php endforeach; ?></fieldset>
-<button class="btn" type="submit" <?=$active?'':'disabled'?>>Gerar token de integração</button>
+<button class="btn" type="submit" <?=$active?'':'disabled'?>>Gerar token adicional</button>
 </form><?php else: ?><div class="notice warn">Conecte um número para criar chaves adicionais específicas. O token inicial independe dessa conexão.</div><?php endif; ?>
 <?php if($keys): ?><hr><h3>Chaves existentes</h3>
 <?php foreach($keys as $k): $keyScopes=is_string($k['scopes_json']??null)?json_decode($k['scopes_json'],true):null; ?><div class="summaryrow"><div><strong><?=metaE($k['name'])?></strong>

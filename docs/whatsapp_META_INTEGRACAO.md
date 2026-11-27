@@ -45,7 +45,7 @@ Referências oficiais:
 
 ## Token inicial automático (ZapAPI, não Meta)
 
-O autocadastro gera um token com escopos de integração padrão e validade de 90 dias, sem exigir um número conectado. O token é limitado à própria empresa e só funciona após a ativação comercial (quando há assinatura); operações de mensagens exigem número ativo e respeitam as permissões. O painel principal entrega o token uma única vez; até a entrega, a cópia temporária é cifrada com a chave mestra. Depois, permanece apenas o hash. Tokens adicionais por número continuam disponíveis.
+O autocadastro gera um token com escopos de integração padrão e validade de 90 dias, sem exigir um número conectado. O token é limitado à própria empresa e só funciona após a ativação comercial (quando há assinatura); operações de mensagens exigem número ativo e respeitam as permissões. O token inicial pode ser consultado novamente em `/painel/meta#api` após autenticação, com cópia cifrada pela chave mestra e hash SHA-256 para autenticação. Tokens adicionais permanecem de exibição única. Tokens adicionais por número continuam disponíveis.
 
 Para clientes ativos anteriores à atualização, execute no servidor (CLI):
 
@@ -54,4 +54,4 @@ php bin/whatsapp_manage.php token:backfill --dry-run
 php bin/whatsapp_manage.php token:backfill
 ```
 
-A simulação prepara/verifica o esquema, mas não emite tokens. O processo é repetível, não imprime segredos e não altera tokens já registrados, inclusive revogados ou expirados. Clientes sem histórico de tokens com escopos também recebem o token ao visitar o painel principal. Chaves legadas não são revogadas. A renovação de tokens expirados/revogados continua manual e deliberada.
+A simulação prepara/verifica o esquema, mas não emite tokens. O processo é repetível, não imprime segredos e não altera tokens já registrados, inclusive revogados ou expirados. Clientes sem histórico de tokens com escopos também recebem o token ao visitar o painel principal ou as configurações. Chaves legadas não são revogadas. A renovação de tokens expirados/revogados continua manual e deliberada.

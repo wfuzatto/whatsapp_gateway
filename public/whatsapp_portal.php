@@ -167,6 +167,7 @@ header('X-Robots-Tag: '.($mode==='landing'?'index, follow':'noindex, nofollow'))
   <?php if($mode==='register'): ?>
    <form action="/cadastro" method="post" class="form" autocomplete="on">
     <input type="hidden" name="csrf" value="<?=whatsappE($csrf)?>">
+     <?php if(!empty($data['token_destination'])): ?><input type="hidden" name="destino" value="token"><?php endif; ?>
     <div class="hp" aria-hidden="true"><label>Site <input name="website" type="text" autocomplete="off" tabindex="-1"></label></div>
     <div class="form-grid">
      <label>Seu nome completo <input type="text" name="name" maxlength="120" minlength="3" autocomplete="name" required value="<?=whatsappE($old['name']??'')?>"></label>
@@ -184,15 +185,16 @@ header('X-Robots-Tag: '.($mode==='landing'?'index, follow':'noindex, nofollow'))
     <label class="checkboxline"><input type="checkbox" name="accept_terms" value="yes" required><span>Entendo que estes valores são propostas, que a conta fica pendente de ativação e que tarifas da Meta serão adicionais. Li a <a href="/politicas/" target="_blank" rel="noopener noreferrer">Política de Privacidade</a> e os <a href="/termos/" target="_blank" rel="noopener noreferrer">Termos de Serviço</a>, e concordo com o tratamento dos dados fornecidos para cadastro e contato comercial.</span></label>
     <button class="btn btn-dark" type="submit" <?=$ready?'':'disabled'?> style="<?=$ready?'':'opacity:.55;cursor:not-allowed'?>">Criar meu tenant →</button>
    </form>
-   <p class="auth-bottom">Já possui conta? <a class="small-link" href="/entrar">Entrar</a></p>
+   <p class="auth-bottom">Já possui conta? <a class="small-link" href="/entrar<?=!empty($data['token_destination'])?'?destino=token':''?>">Entrar</a></p>
   <?php else: ?>
    <form action="/entrar" method="post" class="form">
     <input type="hidden" name="csrf" value="<?=whatsappE($csrf)?>">
+     <?php if(!empty($data['token_destination'])): ?><input type="hidden" name="destino" value="token"><?php endif; ?>
     <label>Seu e-mail <input type="email" name="email" autocomplete="username" required value="<?=whatsappE($old['email']??'')?>"></label>
     <label>Senha <input type="password" name="password" autocomplete="current-password" required></label>
     <button class="btn btn-dark" type="submit" <?=$ready?'':'disabled'?> style="<?=$ready?'':'opacity:.55;cursor:not-allowed'?>">Entrar no painel →</button>
    </form>
-   <p class="auth-bottom">Ainda não tem cadastro? <a class="small-link" href="/cadastro">Criar conta</a></p>
+   <p class="auth-bottom">Ainda não tem cadastro? <a class="small-link" href="/cadastro<?=!empty($data['token_destination'])?'?destino=token':''?>">Criar conta</a></p>
   <?php endif; ?>
  </div>
  <aside class="auth-side">
@@ -206,14 +208,10 @@ header('X-Robots-Tag: '.($mode==='landing'?'index, follow':'noindex, nofollow'))
 <section class="dashboard"><div class="container">
  <div class="dash-top"><div><div class="eyebrow">PAINEL DO CLIENTE</div><h1>Olá, <?=whatsappE($user['name'])?>.</h1><p><?=whatsappE($user['company'])?> · <?=whatsappE($user['email'])?></p></div>
  <span class="badge <?=($user['subscription_status']??'')==='active'?'':'badge-pending'?>"><?=($user['subscription_status']??'')==='active'?'Assinatura ativa':'Aguardando ativação'?></span></div>
- <?php if(!empty($user['initial_api_token'])): ?>
  <article class="dash-panel" style="border-color:#a8dfc7">
-  <h2>Seu token de integração foi criado automaticamente</h2>
-  <p>Copie e guarde em local seguro. O token é exibido apenas uma vez, tem validade de 90 dias e pertence exclusivamente à sua empresa. A operação depende da ativação da assinatura e da conexão do número à Meta.</p>
-  <label>Token ZapAPI <input class="mono" style="width:100%;padding:12px" type="text" readonly autocomplete="off" value="<?=whatsappE($user['initial_api_token'])?>"></label>
-  <p><a class="small-link" href="/painel/meta#api">Gerenciar tokens e permissões</a></p>
- </article>
- <?php endif; ?>
+   <h2>Seu token ZapAPI</h2><p>Consulte seu token de integração nas configurações da sua empresa.</p>
+   <a class="btn btn-dark" href="/painel/meta#api">Ver meu token →</a>
+  </article>
  <div class="dash-grid">
   <article class="metric"><small>Plano selecionado</small><strong><?=whatsappE($user['plan_title']??'Não configurado')?></strong><small><?=whatsappE(WhatsAppPortal::money((int)($user['price_cents_snapshot']??0)))?> /mês · proposta</small></article>
   <article class="metric"><small>Números cadastrados</small><strong><?=whatsappE($user['number_count'])?> <span style="font-size:.9rem;color:#6c8176">/ <?=whatsappE($user['max_numbers']??0)?></span></strong><small>Contas no tenant</small></article>

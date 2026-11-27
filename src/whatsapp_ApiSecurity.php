@@ -102,28 +102,18 @@ final class WhatsAppApiSecurity {
         }catch(Throwable $e){if($own&&$pdo->inTransaction())$pdo->rollBack();throw $e;}
     }
 
-    /** Retira a copia cifrada uma unica vez para um tenant autenticado. */
-    public static function takeDefaultToken(int $tenantId): ?string {
+    /** Consulta a credencial inicial cifrada no painel autenticado. */
+    public static function readDefaultToken(int $tenantId): ?string {
         self::ensureSchema();
-        $pdo=db();$pdo->beginTransaction();
-        try {
-            $s=$pdo->prepare('SELECT d.pending_box,k.token_hash,k.active,
-                (k.expires_at>UTC_TIMESTAMP()) AS unexpired
-                FROM whatsapp_auto_api_token_delivery d
-                JOIN whatsapp_api_tokens k ON k.id=d.token_id AND k.tenant_id=d.tenant_id
-                WHERE d.tenant_id=? AND d.pending_box IS NOT NULL FOR UPDATE');
-            $s->execute([$tenantId]);$row=$s->fetch();
-            $plain=null;
-            if($row){
-                if($row['active']&&$row['unexpired']){
-                    $plain=unseal($row['pending_box']);
-                    if(!hash_equals($row['token_hash'],hash('sha256',$plain)))
-                        throw new RuntimeException('Invalid token delivery');
-                }
-                $pdo->prepare('UPDATE whatsapp_auto_api_token_delivery SET pending_box=NULL WHERE tenant_id=?')->execute([$tenantId]);
-            }
-            $pdo->commit();return $plain;
-        }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
+        $s=db()->prepare('SELECT d.pending_box,k.token_hash FROM whatsapp_auto_api_token_delivery d
+            JOIN whatsapp_api_tokens k ON k.id=d.token_id AND k.tenant_id=d.tenant_id
+            WHERE d.tenant_id=? AND d.pending_box IS NOT NULL AND k.active=1 AND k.expires_at>UTC_TIMESTAMP()');
+        $s->execute([$tenantId]);$row=$s->fetch();
+        if(!$row)return null;
+        $plain=unseal($row['pending_box']);
+        if(!hash_equals($row['token_hash'],hash('sha256',$plain)))
+            throw new RuntimeException('Invalid token delivery');
+        return $plain;
     }
 
     public static function createToken(int $tenantId,int $accountId,string $name,array $scopes,int $expiresDays): array {

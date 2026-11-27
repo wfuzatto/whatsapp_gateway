@@ -6,7 +6,7 @@ O endpoint MCP permite que um cliente compatível leia conversas, consulte mensa
 
 ## Conectar
 
-1. No painel **Integração Meta → Chaves de API**, crie um token separado para cada sistema consumidor.
+1. No painel **Integração Meta → Chaves de API**, consulte o token inicial automático ou crie um token adicional para cada sistema consumidor.
 2. Marque `mcp:connect` e os escopos das ferramentas que esse sistema realmente precisa. O token fica limitado a um único número e expira conforme a validade selecionada.
 3. Configure o cliente MCP para chamar `https://zapapi.inf.br/mcp` com `Authorization: Bearer wg_TOKEN`.
 
@@ -75,8 +75,8 @@ O MCP/API não chama o sistema externo quando chega um evento. Para atualizaçõ
 
 ## Controles de segurança
 
-- Bearer separado dos tokens Meta, com entropia aleatória de 256 bits; apenas o hash SHA-256 é persistido.
-- Token criado no painel com CSRF, escopo explícito, número único e expiração; segredo mostrado uma vez.
+- Bearer separado dos tokens Meta, com entropia aleatória de 256 bits; o hash SHA-256 é persistido; o token inicial também possui uma cópia cifrada para consulta autenticada.
+- Tokens adicionais criados no painel têm CSRF, escopo explícito, número único, expiração e exibição única. O token inicial automático tem escopos padrão e é restrito ao tenant.
 - `mcp:connect` é obrigatório e não é concedido a chaves legadas. Ferramentas também exigem o próprio escopo.
 - Validação de `Origin` não confia no `Host` enviado pelo cliente. Configure as origens HTTPS confiáveis em `MCP_ALLOWED_ORIGINS`; clientes sem Origin são tratados como chamadas de máquina.
 - TLS obrigatório pelo front controller, limites de corpo e rate limit por credencial: 120 chamadas/minuto, incluindo no máximo 30 escritas/minuto.

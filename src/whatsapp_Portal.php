@@ -145,7 +145,7 @@ final class WhatsAppPortal {
         session_regenerate_id(true);
         $_SESSION['whatsapp_user_id']=$userId;
         $_SESSION['whatsapp_csrf']=bin2hex(random_bytes(32));
-        self::redirect('/painel');
+        self::redirect(($post['destino']??null)==='token'?'/painel/meta#api':'/painel');
     }
     private static function login(array $post): never {
         self::verifyCsrf($post);
@@ -167,7 +167,7 @@ final class WhatsAppPortal {
         $_SESSION['whatsapp_csrf']=bin2hex(random_bytes(32));
         db()->prepare('UPDATE whatsapp_users SET last_login_at=UTC_TIMESTAMP() WHERE id=?')
             ->execute([$user['id']]);
-        self::redirect('/painel');
+        self::redirect(($post['destino']??null)==='token'?'/painel/meta#api':'/painel');
     }
     private static function user(): ?array {
         $id=(int)($_SESSION['whatsapp_user_id'] ?? 0);
@@ -192,7 +192,6 @@ final class WhatsAppPortal {
         $s->execute([$user['tenant_id']]);$user['message_count']=(int)$s->fetchColumn();
         // Clientes anteriores a atualizacao tambem recebem a credencial ao acessar o painel.
         WhatsAppApiSecurity::provisionDefaultToken((int)$user['tenant_id']);
-        $user['initial_api_token']=WhatsAppApiSecurity::takeDefaultToken((int)$user['tenant_id']);
         return $user;
     }
     private static function redirect(string $url): never {
@@ -201,6 +200,7 @@ final class WhatsAppPortal {
     public static function show(string $view,array $vars=[]): void {
         self::session();
         $data=$vars;
+        $data['token_destination']=($_POST['destino']??$_GET['destino']??null)==='token';
         $data['plans']=self::plans();
         $data['ready']=self::ready();
         $data['csrf']=self::csrf();
@@ -248,11 +248,11 @@ final class WhatsAppPortal {
             self::show('dashboard',['user'=>$user]);return true;
         }
         if($path==='/entrar') {
-            if(!empty($_SESSION['whatsapp_user_id']))self::redirect('/painel');
+            if(!empty($_SESSION['whatsapp_user_id']))self::redirect(($_GET['destino']??null)==='token'?'/painel/meta#api':'/painel');
             self::show('login');return true;
         }
         if($path==='/cadastro') {
-            if(!empty($_SESSION['whatsapp_user_id']))self::redirect('/painel');
+            if(!empty($_SESSION['whatsapp_user_id']))self::redirect(($_GET['destino']??null)==='token'?'/painel/meta#api':'/painel');
             $selected=(string)($_GET['plano']??'');
             self::show('register',['selected'=>$selected]);return true;
         }

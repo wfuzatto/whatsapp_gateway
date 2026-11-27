@@ -52,11 +52,15 @@ register_tenant "$tmp/b.jar" "cliente2" "profissional" "Empresa Lua B"
 if grep -q 'Empresa Lua B' "$tmp/dashboard-cliente1"; then echo "FAIL: vazamento B para A"; exit 1; fi
 if grep -q 'Empresa Sol A' "$tmp/dashboard-cliente2"; then echo "FAIL: vazamento A para B"; exit 1; fi
 echo "OK: painéis isolados por tenant"
-token_a="$(grep -oE 'wg_[a-f0-9]{64}' "$tmp/dashboard-cliente1" | head -1)"
-token_b="$(grep -oE 'wg_[a-f0-9]{64}' "$tmp/dashboard-cliente2" | head -1)"
+curl -fsS -b "$tmp/a.jar" "$host/painel/meta" -o "$tmp/settings-a"
+curl -fsS -b "$tmp/b.jar" "$host/painel/meta" -o "$tmp/settings-b"
+grep -q "Copiar token" "$tmp/settings-a"
+token_a="$(grep -oE 'wg_[a-f0-9]{64}' "$tmp/settings-a" | head -1)"
+token_b="$(grep -oE 'wg_[a-f0-9]{64}' "$tmp/settings-b" | head -1)"
 [[ "$token_a" != "$token_b" ]]
-curl -fsS -b "$tmp/a.jar" "$host/painel" -o "$tmp/reload-a"
-if grep -qF "$token_a" "$tmp/reload-a"; then echo "FAIL: token repetido"; exit 1; fi
+curl -fsS -b "$tmp/a.jar" "$host/painel/meta" -o "$tmp/reload-a"
+grep -qF "$token_a" "$tmp/reload-a"
+if grep -qF "$token_b" "$tmp/reload-a" || grep -qF "$token_a" "$tmp/settings-b" || grep -qF "$token_a" "$tmp/dashboard-cliente1"; then echo "FAIL: token fora das configuracoes do tenant"; exit 1; fi
 TOKEN_A="$token_a" TOKEN_B="$token_b" php -r '
 require "src/whatsapp_ApiSecurity.php";
 foreach(["A"=>"cliente1","B"=>"cliente2"] as $letter=>$prefix){
@@ -66,11 +70,11 @@ foreach(["A"=>"cliente1","B"=>"cliente2"] as $letter=>$prefix){
         WHERE u.email=? AND k.token_hash=?");
     $s->execute([$prefix."@portal-test.invalid",hash("sha256",getenv("TOKEN_".$letter))]);
     $row=$s->fetch();
-    if(!$row || $row["account_id"]!==null || !(int)$row["active"] || $row["pending_box"]!==null)exit(1);
+    if(!$row || $row["account_id"]!==null || !(int)$row["active"] || $row["pending_box"]===null)exit(1);
     $_SERVER["HTTP_AUTHORIZATION"]="Bearer ".getenv("TOKEN_".$letter);
     try{WhatsAppApiSecurity::authenticate();exit(1);}catch(HttpError $e){if($e->httpStatus!==401)throw $e;}
 }
-echo "OK: tokens unicos, hash por tenant, entrega unica e assinatura pendente bloqueada\n";
+echo "OK: tokens unicos, hash por tenant, consulta autenticada repetivel e assinatura pendente bloqueada\n";
 '
 php -r '
 require "src/whatsapp_bootstrap.php";
@@ -89,14 +93,16 @@ csrf="$(csrf_of "$tmp/dashboard-cliente1")"
 code="$(curl -sS -o /dev/null -w '%{http_code}' -b "$tmp/a.jar" -c "$tmp/a.jar" \
  -X POST "$host/sair" --data-urlencode "csrf=$csrf")"
 [[ "$code" == "303" ]]
-curl -fsS -b "$tmp/a.jar" "$host/entrar" -o "$tmp/login"
+curl -fsS -b "$tmp/a.jar" "$host/entrar?destino=token" -o "$tmp/login"
 csrf="$(csrf_of "$tmp/login")"
 code="$(curl -sS -o /dev/null -w '%{http_code}' -b "$tmp/a.jar" -c "$tmp/a.jar" \
- -X POST "$host/entrar" --data-urlencode "csrf=$csrf" \
+ -X POST "$host/entrar" -D "$tmp/login-headers" --data-urlencode 'destino=token' --data-urlencode "csrf=$csrf" \
  --data-urlencode 'email=cliente1@portal-test.invalid' \
  --data-urlencode 'password=SenhaForteEmCI789')"
 [[ "$code" == "303" ]]
-curl -fsS -b "$tmp/a.jar" "$host/painel" -o "$tmp/painel-login"
+grep -qi "Location: /painel/meta#api" "$tmp/login-headers"
+curl -fsS -b "$tmp/a.jar" "$host/painel/meta" -o "$tmp/painel-login"
+grep -qF "$token_a" "$tmp/painel-login"
 grep -q 'Empresa Sol A' "$tmp/painel-login"
 echo "OK: logout e login"
 
@@ -113,8 +119,8 @@ php bin/whatsapp_manage.php token:backfill | grep -q '"created":0'
 php -r '
 require "src/whatsapp_ApiSecurity.php";
 $id=(int)tenantBySlug("legacy-token-test")["id"];
-$plain=WhatsAppApiSecurity::takeDefaultToken($id);
-if(!$plain || WhatsAppApiSecurity::takeDefaultToken($id)!==null)exit(1);
+$plain=WhatsAppApiSecurity::readDefaultToken($id);
+if(!$plain || WhatsAppApiSecurity::readDefaultToken($id)!==$plain)exit(1);
 $_SERVER["HTTP_AUTHORIZATION"]="Bearer ".$plain;
 $c=WhatsAppApiSecurity::authenticate();
 if((int)$c["tenant_id"]!==$id || !$c["scoped"] || $c["account_id"]!==null)exit(1);

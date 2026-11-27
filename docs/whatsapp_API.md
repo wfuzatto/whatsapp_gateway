@@ -4,7 +4,7 @@ A API serve sistemas externos autenticados por token próprio da ZapApi. O servi
 
 ## Autenticação e isolamento
 
-1. No painel **Integração Meta → Chaves de API**, crie um token para o sistema que vai integrar. Tokens novos são aleatórios, têm 256 bits, ficam armazenados como SHA-256, são vinculados a um único número e aparecem somente uma vez.
+1. No painel **Integração Meta → Chaves de API**, consulte o token inicial automático da empresa ou crie um token adicional para o sistema que vai integrar. Os tokens têm 256 bits e hash SHA-256; o inicial também possui cópia cifrada para consulta autenticada. Tokens adicionais são vinculados a um número e aparecem somente uma vez.
 2. Selecione somente as permissões necessárias e uma validade de 30, 90, 180 ou 365 dias. Para MCP, inclua `mcp:connect`.
 3. Envie o token em `Authorization: Bearer wg_...` por HTTPS. Nunca o coloque em JavaScript público, URL, logs, repositório ou conversa.
 4. Para rotacionar, crie e configure o token novo no sistema cliente e depois revogue o anterior no painel. A revogação passa a valer nas próximas chamadas.
