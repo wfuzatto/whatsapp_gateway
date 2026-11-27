@@ -11,13 +11,26 @@ final class WhatsAppApiSecurity {
         'media:upload','media:read','media:delete','meta:manage','mcp:connect'
     ];
 
+    // Mesmos escopos preselecionados no formulario de integracao.
+    public const DEFAULT_SCOPES = [
+        'mcp:connect','accounts:read','conversations:read','conversations:mark_read',
+        'messages:read','messages:send','templates:read','events:read','jobs:read'
+    ];
+
+    private static function accountNullable(): bool {
+        $s=db()->query("SELECT IS_NULLABLE FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='whatsapp_api_tokens'
+              AND COLUMN_NAME='account_id'");
+        return $s->fetchColumn()==='YES';
+    }
+
     public static function ensureSchema(): void {
         static $ready=false;
         if($ready)return;
         db()->exec("CREATE TABLE IF NOT EXISTS whatsapp_api_tokens (
           id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
           tenant_id BIGINT UNSIGNED NOT NULL,
-          account_id BIGINT UNSIGNED NOT NULL,
+          account_id BIGINT UNSIGNED DEFAULT NULL,
           name VARCHAR(120) NOT NULL,
           token_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
           scopes_json JSON NOT NULL,
@@ -30,6 +43,23 @@ final class WhatsAppApiSecurity {
           FOREIGN KEY (tenant_id) REFERENCES whatsapp_tenants(id),
           FOREIGN KEY (tenant_id,account_id) REFERENCES whatsapp_accounts(tenant_id,id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // DDL somente fora de transacoes: MySQL faz commit implicito.
+        // Migracao aditiva: NULL representa o tenant inteiro; FKs continuam protegendo numeros especificos.
+        if(!self::accountNullable()){
+            try {
+                db()->exec('ALTER TABLE whatsapp_api_tokens MODIFY account_id BIGINT UNSIGNED DEFAULT NULL');
+            }catch(PDOException $e){
+                if(!self::accountNullable())throw $e;
+            }
+        }
+        db()->exec("CREATE TABLE IF NOT EXISTS whatsapp_auto_api_token_delivery (
+          tenant_id BIGINT UNSIGNED PRIMARY KEY,
+          token_id BIGINT UNSIGNED NOT NULL UNIQUE,
+          pending_box TEXT DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (tenant_id) REFERENCES whatsapp_tenants(id),
+          FOREIGN KEY (token_id) REFERENCES whatsapp_api_tokens(id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         db()->exec("CREATE TABLE IF NOT EXISTS whatsapp_api_rate_limits (
           credential_type ENUM('token','legacy') NOT NULL,
           credential_id BIGINT UNSIGNED NOT NULL,
@@ -40,6 +70,50 @@ final class WhatsAppApiSecurity {
           INDEX idx_api_rate_window (window_start)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         $ready=true;
+    }
+
+    /** Cria a credencial inicial uma unica vez, sem alterar tokens manuais ou revogados.
+     *  O chamador deve preparar o esquema antes de iniciar qualquer transacao.
+     */
+    public static function provisionDefaultToken(int $tenantId): bool {
+        $pdo=db();
+        $own=!$pdo->inTransaction();
+        if($own){self::ensureSchema();$pdo->beginTransaction();}
+        try {
+            $lock=$pdo->prepare("SELECT id FROM whatsapp_tenants WHERE id=? AND status='active' FOR UPDATE");
+            $lock->execute([$tenantId]);
+            $exists=$pdo->prepare('SELECT id FROM whatsapp_api_tokens WHERE tenant_id=? LIMIT 1 FOR UPDATE');
+            $exists->execute([$tenantId]);
+            // Historico de tokens inclui revogacoes deliberadas: nao reemitir automaticamente.
+            if(!$lock->fetchColumn() || $exists->fetchColumn()){
+                if($own)$pdo->commit();
+                return false;
+            }
+            $plain='wg_'.bin2hex(random_bytes(32));
+            $expires=gmdate('Y-m-d H:i:s',time()+90*86400);
+            $s=$pdo->prepare('INSERT INTO whatsapp_api_tokens
+                (tenant_id,account_id,name,token_hash,scopes_json,expires_at) VALUES (?,NULL,?,?,?,?)');
+            $s->execute([$tenantId,'Token inicial ZapAPI',hash('sha256',$plain),jsonString(self::DEFAULT_SCOPES),$expires]);
+            $id=(int)$pdo->lastInsertId();
+            $s=$pdo->prepare('INSERT INTO whatsapp_auto_api_token_delivery(tenant_id,token_id,pending_box) VALUES (?,?,?)');
+            $s->execute([$tenantId,$id,seal($plain)]);
+            if($own)$pdo->commit();
+            return true;
+        }catch(Throwable $e){if($own&&$pdo->inTransaction())$pdo->rollBack();throw $e;}
+    }
+
+    /** Consulta a credencial inicial cifrada no painel autenticado. */
+    public static function readDefaultToken(int $tenantId): ?string {
+        self::ensureSchema();
+        $s=db()->prepare('SELECT d.pending_box,k.token_hash FROM whatsapp_auto_api_token_delivery d
+            JOIN whatsapp_api_tokens k ON k.id=d.token_id AND k.tenant_id=d.tenant_id
+            WHERE d.tenant_id=? AND d.pending_box IS NOT NULL AND k.active=1 AND k.expires_at>UTC_TIMESTAMP()');
+        $s->execute([$tenantId]);$row=$s->fetch();
+        if(!$row)return null;
+        $plain=unseal($row['pending_box']);
+        if(!hash_equals($row['token_hash'],hash('sha256',$plain)))
+            throw new RuntimeException('Invalid token delivery');
+        return $plain;
     }
 
     public static function createToken(int $tenantId,int $accountId,string $name,array $scopes,int $expiresDays): array {
@@ -72,8 +146,9 @@ final class WhatsAppApiSecurity {
                 k.name AS credential_name,k.scopes_json,k.expires_at,t.slug AS tenant_slug,'token' AS credential_type
             FROM whatsapp_api_tokens k
             JOIN whatsapp_tenants t ON t.id=k.tenant_id
-            JOIN whatsapp_accounts a ON a.tenant_id=k.tenant_id AND a.id=k.account_id AND a.status='active'
             WHERE k.token_hash=? AND k.active=1 AND k.expires_at>UTC_TIMESTAMP() AND t.status='active'
+              AND (k.account_id IS NULL OR EXISTS(SELECT 1 FROM whatsapp_accounts a
+                   WHERE a.tenant_id=k.tenant_id AND a.id=k.account_id AND a.status='active'))
               AND (NOT EXISTS(SELECT 1 FROM whatsapp_subscriptions sub WHERE sub.tenant_id=t.id)
                    OR EXISTS(SELECT 1 FROM whatsapp_subscriptions sub WHERE sub.tenant_id=t.id AND sub.status='active'))
             LIMIT 1");

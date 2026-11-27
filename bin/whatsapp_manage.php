@@ -14,6 +14,7 @@ function usage(): never {
     echo "  php bin/whatsapp_manage.php account:token:rotate PHONE_NUMBER_ID\n";
     echo "  php bin/whatsapp_manage.php key:add TENANT_SLUG LABEL [PHONE_NUMBER_ID]\n";
     echo "  php bin/whatsapp_manage.php key:revoke KEY_ID\n";
+    echo "  php bin/whatsapp_manage.php token:backfill [--dry-run]\n";
     echo "  php bin/whatsapp_manage.php callback:set PHONE_NUMBER_ID HTTPS_URL\\n";
     echo "  php bin/whatsapp_manage.php plan:list\\n";
     echo "  php bin/whatsapp_manage.php plan:price PLAN_SLUG VALOR_EM_CENTAVOS\\n";
@@ -136,6 +137,22 @@ try {
         $st=db()->prepare('INSERT INTO whatsapp_api_keys(tenant_id,account_id,name,token_hash) VALUES (?,?,?,?)');
         $st->execute([$t['id'],$accountId,$label,hash('sha256',$key)]);
         echo "API key (mostrada UMA VEZ): ".$key."\n";
+    } elseif ($cmd==='token:backfill' && (count($argv)===2 || (count($argv)===3 && $argv[2]==='--dry-run'))) {
+        require_once dirname(__DIR__).'/src/whatsapp_ApiSecurity.php';
+        WhatsAppApiSecurity::ensureSchema();
+        $dry=count($argv)===3;
+        $ids=db()->query("SELECT t.id FROM whatsapp_tenants t
+            WHERE t.status='active' AND EXISTS(SELECT 1 FROM whatsapp_users u WHERE u.tenant_id=t.id AND u.status='active')
+              AND NOT EXISTS(SELECT 1 FROM whatsapp_api_tokens k WHERE k.tenant_id=t.id) ORDER BY t.id")->fetchAll(PDO::FETCH_COLUMN);
+        $created=0;$skipped=0;$failed=0;
+        foreach($ids as $id){
+            if($dry)continue;
+            try {
+                if(WhatsAppApiSecurity::provisionDefaultToken((int)$id))$created++;else $skipped++;
+            }catch(Throwable $e){$failed++;fwrite(STDERR,"Falha no tenant ".(int)$id."\n");}
+        }
+        echo jsonString(['dry_run'=>$dry,'eligible'=>count($ids),'created'=>$created,'skipped'=>$skipped,'failed'=>$failed])."\n";
+        if($failed)exit(1);
     } elseif ($cmd==='key:revoke' && count($argv)===3 && ctype_digit($argv[2])) {
         $st=db()->prepare('UPDATE whatsapp_api_keys SET active=0 WHERE id=?');
         $st->execute([$argv[2]]);

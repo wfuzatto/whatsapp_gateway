@@ -21,24 +21,24 @@ header('Cache-Control: no-store');
   </style>
 </head>
 <body>
-<header><div class="top"><a class="brand" href="/">ZapApi</a><nav><a href="/painel/meta#api">Gerar token</a><a href="/painel/conversas">Central de conversas</a></nav></div></header>
+<header><div class="top"><a class="brand" href="/">ZapApi</a><nav><a href="/entrar?destino=token">Gerar token</a><a href="/painel/conversas">Central de conversas</a></nav></div></header>
 <main>
   <section class="hero">
     <div class="eyebrow">Integração segura e multitenant</div>
     <h1>MCP e API ZapApi</h1>
     <p>Conecte um sistema ao WhatsApp oficial da empresa para consultar conversas, receber eventos e enviar mensagens ou templates aprovados. Cada token fica isolado em um único tenant e número autorizado.</p>
     <p><strong>Endpoint MCP</strong></p><div class="endpoint">https://zapapi.inf.br/mcp</div>
-    <p><a class="btn" href="/painel/meta#api">Criar token de integração</a></p>
+    <p><a class="btn" href="/entrar?destino=token">Gerar token</a></p>
   </section>
 
   <div class="grid">
     <section class="card">
-      <h2>1. Criar credencial</h2>
+      <h2>1. Acessar seu token</h2>
       <ol class="steps">
-        <li>Entre no painel e abra <strong>Integração Meta → Chaves de API do seu tenant</strong>.</li>
-        <li>Crie um token novo para cada sistema consumidor e selecione somente os escopos necessários.</li>
-        <li>Marque <code class="inline">Conectar via MCP</code>. Tokens legados REST não autenticam o MCP.</li>
-        <li>Copie o token quando for exibido. Ele só aparece uma vez e não é o token de acesso da Meta.</li>
+        <li>Clique em <strong>Gerar token</strong> e faça login. Você será direcionado às configurações, na seção Chaves de API.</li>
+        <li>Seu token inicial é gerado automaticamente no cadastro, sem necessidade de criá-lo manualmente.</li>
+        <li>O token inicial já inclui <code class="inline">mcp:connect</code>. Para integrações adicionais, selecione somente os escopos necessários.</li>
+        <li>Use o botão Copiar token nas configurações. O token ZapAPI é independente do token de acesso da Meta.</li>
       </ol>
       <p>O backend deriva o tenant e o número do token. Um campo enviado pelo cliente não pode ampliar esse acesso. Tokens têm validade configurável e podem ser revogados no painel.</p>
     </section>
