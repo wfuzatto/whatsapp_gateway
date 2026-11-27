@@ -131,12 +131,12 @@ footer{max-width:1180px;margin:0 auto 25px;padding:0 24px;color:#72887d;font-siz
 <p class="help">Em <a class="link" href="https://developers.facebook.com/apps/" rel="noreferrer">Meta for Developers</a>, abra seu aplicativo WhatsApp e localize WABA ID, Phone Number ID e o token de acesso do usuário de sistema. A plataforma testa as permissões antes de salvar.</p>
 <form class="form" method="post" action="/painel/meta">
 <input type="hidden" name="csrf" value="<?=metaE($csrf)?>"><input type="hidden" name="action" value="connect">
-<label>Nome da conexão <input name="name" required maxlength="120" placeholder="Ex.: Atendimento principal"></label>
+<label>Nome da conexão <input name="name" required maxlength="120" placeholder="Ex.: Atendimento principal" value="<?=metaE($current['name']??'')?>"></label>
 <div class="twocol">
-<label>WhatsApp Business Account ID (WABA) <input name="waba_id" required inputmode="numeric" pattern="[0-9]+" maxlength="40" placeholder="Ex.: 123456789012345"></label>
-<label>Phone Number ID <input name="phone_number_id" required inputmode="numeric" pattern="[0-9]+" maxlength="40" placeholder="Ex.: 987654321098765"></label>
+<label>WhatsApp Business Account ID (WABA) <input name="waba_id" required inputmode="numeric" pattern="[0-9]+" maxlength="40" placeholder="Ex.: 123456789012345" value="<?=metaE($current['waba_id']??'')?>"></label>
+<label>Phone Number ID <input name="phone_number_id" required inputmode="numeric" pattern="[0-9]+" maxlength="40" placeholder="Ex.: 987654321098765" value="<?=metaE($current['phone_number_id']??'')?>"></label>
 </div>
-<label>Token de acesso de longa duração da Meta <input type="password" name="access_token" required minlength="30" maxlength="4096" autocomplete="new-password" placeholder="Cole o token de usuário de sistema"><small>Use o token permanente do usuário de sistema, com permissões whatsapp_business_management e whatsapp_business_messaging. Nunca exibiremos o token após salvar. Para rotacioná-lo, use os mesmos IDs e informe o token novo.</small></label>
+<label>Token de acesso de longa duração da Meta <input type="password" name="access_token" required minlength="30" maxlength="4096" autocomplete="new-password" placeholder="Cole o token de usuário de sistema"><small><?php if($current): ?>Os dados da conexão cadastrada estão preenchidos. Para trocar o token, mantenha-os e informe apenas o novo token. <?php endif; ?>Use o token permanente do usuário de sistema, com permissões whatsapp_business_management e whatsapp_business_messaging. Nunca exibiremos o token após salvar.</small></label>
 <button type="submit" class="btn" <?=$active?'':'disabled'?>>Validar e salvar integração</button>
 </form>
 <div class="notice warn" style="margin-top:17px;margin-bottom:0">O WABA é exclusivo do seu tenant. O plano permite até <?=metaE($user['max_numbers']??0)?> número(s). Não coloque o App Secret na caixa do token.</div>
