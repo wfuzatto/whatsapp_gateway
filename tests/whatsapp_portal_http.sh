@@ -49,6 +49,26 @@ register_tenant "$tmp/b.jar" "cliente2" "profissional" "Empresa Lua B"
 if grep -q 'Empresa Lua B' "$tmp/dashboard-cliente1"; then echo "FAIL: vazamento B para A"; exit 1; fi
 if grep -q 'Empresa Sol A' "$tmp/dashboard-cliente2"; then echo "FAIL: vazamento A para B"; exit 1; fi
 echo "OK: painéis isolados por tenant"
+token_a="$(grep -oE 'wg_[a-f0-9]{64}' "$tmp/dashboard-cliente1" | head -1)"
+token_b="$(grep -oE 'wg_[a-f0-9]{64}' "$tmp/dashboard-cliente2" | head -1)"
+[[ "$token_a" != "$token_b" ]]
+curl -fsS -b "$tmp/a.jar" "$host/painel" -o "$tmp/reload-a"
+if grep -qF "$token_a" "$tmp/reload-a"; then echo "FAIL: token repetido"; exit 1; fi
+TOKEN_A="$token_a" TOKEN_B="$token_b" php -r '
+require "src/whatsapp_ApiSecurity.php";
+foreach(["A"=>"cliente1","B"=>"cliente2"] as $letter=>$prefix){
+    $s=db()->prepare("SELECT k.id,k.account_id,k.active,d.pending_box FROM whatsapp_api_tokens k
+        JOIN whatsapp_users u ON u.tenant_id=k.tenant_id
+        JOIN whatsapp_auto_api_token_delivery d ON d.token_id=k.id
+        WHERE u.email=? AND k.token_hash=?");
+    $s->execute([$prefix."@portal-test.invalid",hash("sha256",getenv("TOKEN_".$letter))]);
+    $row=$s->fetch();
+    if(!$row || $row["account_id"]!==null || !(int)$row["active"] || $row["pending_box"]!==null)exit(1);
+    $_SERVER["HTTP_AUTHORIZATION"]="Bearer ".getenv("TOKEN_".$letter);
+    try{WhatsAppApiSecurity::authenticate();exit(1);}catch(HttpError $e){if($e->httpStatus!==401)throw $e;}
+}
+echo "OK: tokens unicos, hash por tenant, entrega unica e assinatura pendente bloqueada\n";
+'
 php -r '
 require "src/whatsapp_bootstrap.php";
 $counts=db()->query("SELECT (SELECT COUNT(*) FROM whatsapp_users) AS u,
@@ -76,3 +96,27 @@ code="$(curl -sS -o /dev/null -w '%{http_code}' -b "$tmp/a.jar" -c "$tmp/a.jar" 
 curl -fsS -b "$tmp/a.jar" "$host/painel" -o "$tmp/painel-login"
 grep -q 'Empresa Sol A' "$tmp/painel-login"
 echo "OK: logout e login"
+
+# Cliente legado sem token: backfill repetivel, sem imprimir credenciais.
+php -r '
+require "src/whatsapp_bootstrap.php";
+db()->prepare("INSERT INTO whatsapp_tenants(slug,name) VALUES (?,?)")->execute(["legacy-token-test","Cliente anterior"]);
+$id=(int)db()->lastInsertId();
+db()->prepare("INSERT INTO whatsapp_users(tenant_id,name,email,password_hash) VALUES (?,?,?,?)")->execute([$id,"Cliente anterior","legacy-token-test@portal-test.invalid",password_hash("SenhaForteEmCI789",PASSWORD_DEFAULT)]);
+'
+php bin/whatsapp_manage.php token:backfill --dry-run | grep -q '"eligible":1'
+php bin/whatsapp_manage.php token:backfill | grep -q '"created":1'
+php bin/whatsapp_manage.php token:backfill | grep -q '"created":0'
+php -r '
+require "src/whatsapp_ApiSecurity.php";
+$id=(int)tenantBySlug("legacy-token-test")["id"];
+$plain=WhatsAppApiSecurity::takeDefaultToken($id);
+if(!$plain || WhatsAppApiSecurity::takeDefaultToken($id)!==null)exit(1);
+$_SERVER["HTTP_AUTHORIZATION"]="Bearer ".$plain;
+$c=WhatsAppApiSecurity::authenticate();
+if((int)$c["tenant_id"]!==$id || !$c["scoped"] || $c["account_id"]!==null)exit(1);
+WhatsAppApiSecurity::revoke($id,(int)$c["credential_id"],"token");
+if(WhatsAppApiSecurity::provisionDefaultToken($id))exit(1);
+try{WhatsAppApiSecurity::authenticate();exit(1);}catch(HttpError $e){if($e->httpStatus!==401)throw $e;}
+echo "OK: backfill idempotente, autenticacao e revogacao\n";
+'

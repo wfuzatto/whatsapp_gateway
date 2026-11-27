@@ -206,6 +206,14 @@ header('X-Robots-Tag: '.($mode==='landing'?'index, follow':'noindex, nofollow'))
 <section class="dashboard"><div class="container">
  <div class="dash-top"><div><div class="eyebrow">PAINEL DO CLIENTE</div><h1>Olá, <?=whatsappE($user['name'])?>.</h1><p><?=whatsappE($user['company'])?> · <?=whatsappE($user['email'])?></p></div>
  <span class="badge <?=($user['subscription_status']??'')==='active'?'':'badge-pending'?>"><?=($user['subscription_status']??'')==='active'?'Assinatura ativa':'Aguardando ativação'?></span></div>
+ <?php if(!empty($user['initial_api_token'])): ?>
+ <article class="dash-panel" style="border-color:#a8dfc7">
+  <h2>Seu token de integração foi criado automaticamente</h2>
+  <p>Copie e guarde em local seguro. O token é exibido apenas uma vez, tem validade de 90 dias e pertence exclusivamente à sua empresa. A operação depende da ativação da assinatura e da conexão do número à Meta.</p>
+  <label>Token ZapAPI <input class="mono" style="width:100%;padding:12px" type="text" readonly autocomplete="off" value="<?=whatsappE($user['initial_api_token'])?>"></label>
+  <p><a class="small-link" href="/painel/meta#api">Gerenciar tokens e permissões</a></p>
+ </article>
+ <?php endif; ?>
  <div class="dash-grid">
   <article class="metric"><small>Plano selecionado</small><strong><?=whatsappE($user['plan_title']??'Não configurado')?></strong><small><?=whatsappE(WhatsAppPortal::money((int)($user['price_cents_snapshot']??0)))?> /mês · proposta</small></article>
   <article class="metric"><small>Números cadastrados</small><strong><?=whatsappE($user['number_count'])?> <span style="font-size:.9rem;color:#6c8176">/ <?=whatsappE($user['max_numbers']??0)?></span></strong><small>Contas no tenant</small></article>

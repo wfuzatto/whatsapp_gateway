@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__.'/whatsapp_bootstrap.php';
+require_once __DIR__.'/whatsapp_ApiSecurity.php';
 
 /**
  * Portal de autocadastro. Um cadastro cria exatamente um tenant, um owner e
@@ -113,6 +114,7 @@ final class WhatsAppPortal {
             throw new HttpError('A confirmação da senha está diferente.',422);
         if (!preg_match('/^[a-z][a-z0-9-]{2,39}$/D',$plan))
             throw new HttpError('Selecione um plano válido.',422);
+        WhatsAppApiSecurity::ensureSchema();
         $pdo=db();
         $pdo->beginTransaction();
         try {
@@ -132,6 +134,7 @@ final class WhatsAppPortal {
                 (tenant_id,plan_id,price_cents_snapshot,status)
                 VALUES (?,?,?,"pending_activation")');
             $s->execute([$tenantId,$selected['id'],$selected['price_cents']]);
+            WhatsAppApiSecurity::provisionDefaultToken($tenantId);
             $pdo->commit();
         } catch(Throwable $e) {
             if($pdo->inTransaction())$pdo->rollBack();
@@ -187,6 +190,9 @@ final class WhatsAppPortal {
         $s->execute([$user['tenant_id']]);$user['number_count']=(int)$s->fetchColumn();
         $s=db()->prepare('SELECT COUNT(*) FROM whatsapp_messages WHERE tenant_id=?');
         $s->execute([$user['tenant_id']]);$user['message_count']=(int)$s->fetchColumn();
+        // Clientes anteriores a atualizacao tambem recebem a credencial ao acessar o painel.
+        WhatsAppApiSecurity::provisionDefaultToken((int)$user['tenant_id']);
+        $user['initial_api_token']=WhatsAppApiSecurity::takeDefaultToken((int)$user['tenant_id']);
         return $user;
     }
     private static function redirect(string $url): never {

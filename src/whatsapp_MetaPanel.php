@@ -363,7 +363,7 @@ final class WhatsAppMetaPanel {
         $legacySt->execute([$tenantId]);$keys=$legacySt->fetchAll();
         $tokensSt=db()->prepare('SELECT k.id,k.name,k.active,k.created_at,k.expires_at,k.scopes_json,
                 "token" AS credential_type,a.name AS account_name
-            FROM whatsapp_api_tokens k JOIN whatsapp_accounts a ON a.id=k.account_id AND a.tenant_id=k.tenant_id
+            FROM whatsapp_api_tokens k LEFT JOIN whatsapp_accounts a ON a.id=k.account_id AND a.tenant_id=k.tenant_id
             WHERE k.tenant_id=? ORDER BY k.id DESC LIMIT 50');
         $tokensSt->execute([$tenantId]);$keys=array_merge($keys,$tokensSt->fetchAll());
         usort($keys,static fn($a,$b)=>strcmp((string)$b['created_at'],(string)$a['created_at']));
