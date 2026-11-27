@@ -2,6 +2,9 @@
 # Testa HTTP, sessao, CSRF e criacao de dois tenants no MySQL descartavel do CI.
 set -Eeuo pipefail
 export APP_REQUIRE_HTTPS=0
+# A chave descartavel deve ser compartilhada pelo servidor HTTP e pelos comandos CLI.
+[[ "${APP_ENV:-}" == test ]] || { echo "Portal HTTP test requires APP_ENV=test"; exit 1; }
+export MASTER_KEY_BASE64="$(php -r 'echo base64_encode(random_bytes(32));')"
 host="http://127.0.0.1:18881"
 tmp="$(mktemp -d)"
 php -S 127.0.0.1:18881 -t public public/whatsapp_index.php > "$tmp/server.log" 2>&1 &
